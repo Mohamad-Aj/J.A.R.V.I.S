@@ -1,0 +1,4 @@
+.venv
+.codegpt
+.env
+user_config.json
