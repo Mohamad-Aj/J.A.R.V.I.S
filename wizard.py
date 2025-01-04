@@ -848,6 +848,11 @@ class RegistrationWizard(ctk.CTk):
         # Collect visible cards to update hobbies and interests
         self.collect_visible_cards()
 
+
+        for category in ["Responses for Hobbies", "Responses for Interests"]:
+            if category not in self.user_data:
+                self.user_data[category] = []  # Initialize as an empty list if no responses are collected
+
         # Prepare the data for JSON serialization
         serializable_data = {
             key: value.get() if isinstance(value, ctk.StringVar) else value
