@@ -9,7 +9,8 @@ try:
     print("Connected to the database!")
 
     # Create tables
-    cursor.execute("""
+    cursor.execute(
+        """
     -- Users table
     CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -58,7 +59,19 @@ try:
         tag TEXT,
         answer TEXT
     );
-    """)
+
+    CREATE TABLE IF NOT EXISTS reminders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    priority TEXT CHECK (priority IN ('low', 'medium', 'high')),
+    datetime TIMESTAMP NOT NULL,
+    snoozed BOOLEAN DEFAULT FALSE,
+    completed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """
+    )
 
     conn.commit()
     print("Tables created successfully!")

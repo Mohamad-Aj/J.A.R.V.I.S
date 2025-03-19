@@ -133,6 +133,50 @@ class JarvisAssistant:
             elif "jarvis" in query or "talk" in query or "what do you think" in query:
                 self.chat_with_jarvis(query)
 
+            elif "reminder" in query or "set reminder" in query:
+                self.speak("Sure, please tell me your reminder details.")
+                from ReminderSystem import ReminderSystem
+
+                reminder_system = ReminderSystem()
+
+                def check_existing_user():
+                    import json
+
+                    """Check if a user is already registered on this machine."""
+                    LOCAL_STORAGE_FILE = "user_config.json"
+                    # print("Checking for existing user...")  # Debug statement
+
+                    if os.path.exists(LOCAL_STORAGE_FILE):
+                        print(
+                            f"Config file found: {LOCAL_STORAGE_FILE}"
+                        )  # Debug statement
+                        try:
+                            with open(LOCAL_STORAGE_FILE, "r") as f:
+                                data = json.load(f)
+                                # print(f"Config file content: {data}")  # Debug statement
+                                user_id = data.get("user_id")
+                                if user_id:  # Ensure the ID is not None or empty
+                                    # print(
+                                    #     f"Existing user detected: {user_id}"
+                                    # )  # Debug statement
+                                    return user_id
+                                else:
+                                    print(
+                                        "No user_id found in config file."
+                                    )  # Debug statement
+                        except json.JSONDecodeError as e:
+                            print(
+                                f"Error reading local storage file: {e}"
+                            )  # Debug statement
+                    else:
+                        print("No config file found.")  # Debug statement
+
+                    return None
+
+                reminder_system.create_reminder_from_voice(
+                    user_id=check_existing_user()
+                )
+
     def start_listening(self):
         """Start the assistant in a loop."""
         self.running = True

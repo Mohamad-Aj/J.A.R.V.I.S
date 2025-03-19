@@ -17,7 +17,7 @@ from PyQt6.QtGui import QPainter, QBrush, QColor, QPen, QRadialGradient
 from qt_material import apply_stylesheet
 from wizard import RegistrationWizard
 from PyQt6.QtWidgets import QApplication
-
+from ReminderSystem import ReminderSystem
 import os
 import json
 from main_window import MainWindow
@@ -30,11 +30,14 @@ class FloatingCircle(QWidget):
 
     restore_signal = pyqtSignal()
     hide_signal = pyqtSignal()
+
     def __init__(self, app_window, parent=None):
         super().__init__(parent)
         self.mic_active = False  # Initialize mic as inactive
         access_key = "51guALrayQ3YkkDW2V7l6r3VJUnRJXnRnBG7fxG1yapci2kz2Tfrqg=="
-        self.assistant = JarvisAssistant(access_key,keyword="jarvis")  # Instantiate JarvisAssistant
+        self.assistant = JarvisAssistant(
+            access_key, keyword="jarvis"
+        )  # Instantiate JarvisAssistant
 
         # Reference to the main app window
         self.app_window = app_window
@@ -43,7 +46,11 @@ class FloatingCircle(QWidget):
         self.hide_signal.connect(self._hide_circle)
         # Circle properties
         self.setFixedSize(150, 150)  # Increased size to accommodate buttons
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint|Qt.WindowType.Tool )
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
+        )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # Dragging properties
@@ -73,7 +80,7 @@ class FloatingCircle(QWidget):
 
     def setup_global_shortcut(self):
         """Set up a global shortcut using the keyboard library."""
-        keyboard.add_hotkey('ctrl+shift+j', self.restore_circle)
+        keyboard.add_hotkey("ctrl+shift+j", self.restore_circle)
 
     def init_buttons_around_circle(self):
         """Initialize the buttons in a semi-circular layout along the upper half of the circle."""
@@ -81,11 +88,18 @@ class FloatingCircle(QWidget):
         center = QPoint(self.width() // 2, self.height() // 2)  # Center of the circle
 
         buttons = [
-            {"icon": "mdi.microphone-off", "active_icon": "mdi.microphone", "handler": self.handle_mic_click},
+            {
+                "icon": "mdi.microphone-off",
+                "active_icon": "mdi.microphone",
+                "handler": self.handle_mic_click,
+            },
             {"icon": "mdi.fullscreen", "handler": self.handle_fullscreen_click},
             {"icon": "mdi.send", "handler": self.handle_send_click},
             {"icon": "mdi.close", "handler": self.handle_close_click},
-            {"icon": "mdi.power", "handler": self.handle_power_click},  # New power button
+            {
+                "icon": "mdi.power",
+                "handler": self.handle_power_click,
+            },  # New power button
         ]
 
         # Adjust angle range
@@ -95,8 +109,12 @@ class FloatingCircle(QWidget):
 
         for i, button_data in enumerate(buttons):
             angle = start_angle + i * angle_step  # Adjusted angle range
-            final_x = center.x() + int(radius * math.cos(angle)) - 15  # Final position x
-            final_y = center.y() + int(radius * math.sin(angle)) - 12  # Final position y
+            final_x = (
+                center.x() + int(radius * math.cos(angle)) - 15
+            )  # Final position x
+            final_y = (
+                center.y() + int(radius * math.sin(angle)) - 12
+            )  # Final position y
 
             button = QPushButton(self)
             button.setIcon(qta.icon(button_data["icon"]))
@@ -104,8 +122,12 @@ class FloatingCircle(QWidget):
             button.setFixedSize(25, 25)  # Increase the button size
             button.setIconSize(QSize(20, 20))  # Adjust the icon size
 
-            button.move(center.x() - 15, center.y() - 15)  # Start at the circle's center
-            button.clicked.connect(lambda _, b=button, bd=button_data: self.handle_button_click(b, bd))
+            button.move(
+                center.x() - 15, center.y() - 15
+            )  # Start at the circle's center
+            button.clicked.connect(
+                lambda _, b=button, bd=button_data: self.handle_button_click(b, bd)
+            )
             button.hide()  # Initially hide all buttons
 
             self.buttons.append(button)
@@ -115,7 +137,9 @@ class FloatingCircle(QWidget):
             animation.setDuration(1100)  # 500 ms animation
             animation.setStartValue(QPoint(center.x() - 15, center.y() - 15))
             animation.setEndValue(QPoint(final_x, final_y))
-            animation.setEasingCurve(QEasingCurve.Type.OutBounce)  # Smooth bounce effect
+            animation.setEasingCurve(
+                QEasingCurve.Type.OutBounce
+            )  # Smooth bounce effect
             self.button_animations.append(animation)
 
     def handle_button_click(self, button, button_data):
@@ -207,9 +231,9 @@ class FloatingCircle(QWidget):
         if self.is_minimized:
             self.is_minimized = False
             self.setWindowFlags(
-                Qt.WindowType.FramelessWindowHint | 
-                Qt.WindowType.WindowStaysOnTopHint | 
-                Qt.WindowType.Tool
+                Qt.WindowType.FramelessWindowHint
+                | Qt.WindowType.WindowStaysOnTopHint
+                | Qt.WindowType.Tool
             )
             self.show()
             self.activateWindow()
@@ -253,7 +277,9 @@ class FloatingCircle(QWidget):
             for x in range(30, 120):
                 y = (
                     amplitudes[i]
-                    * math.sin((x / wavelengths[i]) * 2 * math.pi + self.wave_phase + phases[i])
+                    * math.sin(
+                        (x / wavelengths[i]) * 2 * math.pi + self.wave_phase + phases[i]
+                    )
                     + 75
                 )
                 painter.drawPoint(x, int(y))
@@ -277,6 +303,7 @@ class FloatingCircle(QWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.dragging = False
+
 
 def check_existing_user():
     """Check if a user is already registered on this machine."""
@@ -302,12 +329,17 @@ def check_existing_user():
 
     return None
 
+
 def launch_main_window():
     """Launch the main window."""
     print("Launching main application...")  # Debug statement
     main_window = MainWindow()
     floating_circle = FloatingCircle(main_window)
     main_window.set_circle_widget(floating_circle)
+    # Start reminder checker in background
+    user_id = check_existing_user()
+    reminder_system = ReminderSystem()
+    reminder_system.start_reminder_checker(user_id)
 
     # Override close behavior to hide instead of closing
     def closeEvent(event):
@@ -319,6 +351,7 @@ def launch_main_window():
     floating_circle.move(200, 200)
     floating_circle.show()
 
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     apply_stylesheet(app, theme="dark_teal.xml")
@@ -326,10 +359,14 @@ if __name__ == "__main__":
     # Check if the user is already registered
     user_id = check_existing_user()
     if user_id:
-        print(f"User already registered with ID: {user_id}. Launching main application.")  # Debug statement
+        print(
+            f"User already registered with ID: {user_id}. Launching main application."
+        )  # Debug statement
         launch_main_window()  # Launch the main application
     else:
-        print("No registered user found. Launching registration wizard.")  # Debug statement
+        print(
+            "No registered user found. Launching registration wizard."
+        )  # Debug statement
         wizard = RegistrationWizard(on_registration_complete=launch_main_window)
         wizard.mainloop()
 
