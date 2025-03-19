@@ -3,10 +3,24 @@ import os
 import threading
 import pvporcupine
 import pyaudio
+import wave
+import audioop
+import numpy as np
 import speech_recognition as sr
 from playsound import playsound
 import edge_tts
-from Dictapp import openappweb, closeappweb, searchWeather, tellTime, searchGoogle, searchYoutube, volumedown, volumeup
+from Dictapp import (
+    openappweb,
+    closeappweb,
+    searchWeather,
+    tellTime,
+    searchGoogle,
+    searchYoutube,
+    volumedown,
+    volumeup,
+    bring_to_front,
+)
+
 
 class JarvisAssistant:
     def __init__(self, access_key, keyword="jarvis"):
@@ -18,7 +32,7 @@ class JarvisAssistant:
 
     async def speak_async(self, audio):
         """Convert text to speech using edge-tts with the 'en-GB-RyanNeural' voice."""
-        voice = 'en-GB-RyanNeural'
+        voice = "en-GB-RyanNeural"
         output_file = "response.mp3"
 
         communicate = edge_tts.Communicate(audio, voice)
@@ -36,15 +50,18 @@ class JarvisAssistant:
         with sr.Microphone() as source:
             print("Adjusting for ambient noise...")
             r.adjust_for_ambient_noise(source, duration=1.0)
+            r.energy_threshold = 400
             print("Listening...")
             try:
-                audio = r.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
+                audio = r.listen(
+                    source, timeout=timeout, phrase_time_limit=phrase_time_limit
+                )
             except sr.WaitTimeoutError:
                 return "None"
 
         try:
             print("Understanding...")
-            query = r.recognize_google(audio, language='en-us')
+            query = r.recognize_google(audio, language="en-us")
             return query.lower().strip()
         except Exception:
             return "None"
@@ -57,15 +74,20 @@ class JarvisAssistant:
             channels=1,
             rate=16000,
             input=True,
-            frames_per_buffer=512
+            frames_per_buffer=512,
         )
 
-        self.porcupine = pvporcupine.create(access_key=self.access_key, keywords=[self.keyword])
+        self.porcupine = pvporcupine.create(
+            access_key=self.access_key, keywords=[self.keyword]
+        )
 
         print("Listening for the wake word...")
         while self.running:
             pcm = stream.read(self.porcupine.frame_length, exception_on_overflow=False)
-            pcm = [int.from_bytes(pcm[i:i+2], byteorder='little', signed=True) for i in range(0, len(pcm), 2)]
+            pcm = [
+                int.from_bytes(pcm[i : i + 2], byteorder="little", signed=True)
+                for i in range(0, len(pcm), 2)
+            ]
             if self.porcupine.process(pcm) >= 0:
                 print("Wake word detected!")
                 self.speak("Yes, I'm listening.")
@@ -78,7 +100,7 @@ class JarvisAssistant:
     def handle_commands(self):
         """Process commands after wake word detection."""
         while self.running:
-            query = self.takeCommand(timeout=None, phrase_time_limit=None)
+            query = self.takeCommand(timeout=5, phrase_time_limit=8)
             if "stop listening" in query or "go to sleep" in query:
                 self.speak("Okay, goodbye for now. Say 'Jarvis' to wake me up again.")
                 return
@@ -98,7 +120,13 @@ class JarvisAssistant:
                 volumeup()
             elif "volume down" in query:
                 volumedown()
-            
+            elif "bring" in query:
+                bring_to_front(query)
+            elif (
+                "news" in query or "bring me news" in query or "open the news" in query
+            ):
+                self.speak("Bringing you the latest news.")
+                self.launch_news_window()
 
     def start_listening(self):
         """Start the assistant in a loop."""
@@ -121,3 +149,9 @@ class JarvisAssistant:
         # if self.thread and self.thread.is_alive():
         #     self.thread.join()  # Ensure the thread finishes execution
 
+    def launch_news_window(self):
+        import multiprocessing
+        from news_launcher import main as news_main
+
+        p = multiprocessing.Process(target=news_main)
+        p.start()

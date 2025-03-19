@@ -2,3 +2,7 @@
 .codegpt
 .env
 user_config.json
+.codegpt
+__pycache__
+test-db.py
+output_contents.txt
