@@ -20,6 +20,9 @@ from Dictapp import (
     volumeup,
     bring_to_front,
 )
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class JarvisAssistant:
@@ -127,6 +130,8 @@ class JarvisAssistant:
             ):
                 self.speak("Bringing you the latest news.")
                 self.launch_news_window()
+            elif "jarvis" in query or "talk" in query or "what do you think" in query:
+                self.chat_with_jarvis(query)
 
     def start_listening(self):
         """Start the assistant in a loop."""
@@ -155,3 +160,39 @@ class JarvisAssistant:
 
         p = multiprocessing.Process(target=news_main)
         p.start()
+
+    def chat_with_jarvis(self, prompt):
+        import openai
+
+        system_prompt = (
+            "You are Jarvis, Tony Stark’s AI assistant. "
+            "You are witty, intelligent, and slightly sarcastic but always polite. "
+            "Speak in a confident, robotic tone, and assist with precision."
+            "limit the speech to 300 tokens"
+        )
+
+        # Maintain context
+        if not hasattr(self, "conversation_log"):
+            self.conversation_log = []
+
+        self.conversation_log.append({"role": "user", "content": prompt})
+
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ] + self.conversation_log[-5:]
+
+        try:
+            response = openai.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                max_tokens=300,
+                temperature=0.7,
+            )
+            reply = response.choices[0].message.content
+            print(f"Jarvis: {reply}")
+            self.conversation_log.append({"role": "assistant", "content": reply})
+            self.speak(reply)
+
+        except Exception as e:
+            print(f"Error in chat_with_jarvis: {e}")
+            self.speak("Apologies, I encountered a problem while processing that.")
