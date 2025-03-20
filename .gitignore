@@ -6,3 +6,4 @@ user_config.json
 __pycache__
 test-db.py
 output_contents.txt
+token*

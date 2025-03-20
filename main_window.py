@@ -33,6 +33,9 @@ from ReminderSystem import ReminderSystem
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QLineEdit, QTextEdit
 import datetime
 from dateutil import parser as date_parser
+import psycopg2
+import os
+import json
 
 load_dotenv()
 
@@ -944,17 +947,38 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Failed to delete reminder: {e}")
 
+    def get_user_data(self, user_id):
+        try:
+            db_url = os.getenv("DATABASE_URL")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT email, city, country FROM users WHERE id = %s", (user_id,)
+            )
+            result = cur.fetchone()
+            cur.close()
+            conn.close()
+            if result:
+                email, city, country = result
+                return {"email": email, "city": city, "country": country}
+            else:
+                return {}
+        except Exception as e:
+            print(f"Database error: {e}")
+            return {}
+
     def handle_add_reminder(self):
         from openai import OpenAIError
         import json
         from datetime import datetime
+        from google_calendar import add_event_to_calendar
 
         user_input = self.reminder_input.toPlainText().strip()
         if not user_input:
             return
         now = datetime.now()
         formatted_now = now.strftime("%Y-%m-%d %H:%M:%S")
-        # Prepare OpenAI prompt
+
         prompt = f"""
         Extract reminder from: '{user_input}'
         Respond in JSON format:
@@ -974,6 +998,11 @@ class MainWindow(QMainWindow):
             dt = date_parser.parse(data["datetime"])
             title = data["title"]
             priority = data.get("priority", "medium")
+
+            # ✅ Add to Google Calendar for current user
+            user_data = self.get_user_data(self.user_id)
+            email = user_data.get("email")
+            add_event_to_calendar(email, title, f"Priority: {priority}", dt)
 
             self.reminder_system.create_reminder(
                 self.user_id, title, priority, dt.isoformat()
