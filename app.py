@@ -357,6 +357,10 @@ if __name__ == "__main__":
     apply_stylesheet(app, theme="dark_teal.xml")
 
     # Check if the user is already registered
+    from global_tracker import tracker_instance
+
+    tracker_instance.start()  # ✅ Start tracking immediately
+
     user_id = check_existing_user()
     if user_id:
         print(

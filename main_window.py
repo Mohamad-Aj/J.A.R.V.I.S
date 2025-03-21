@@ -36,6 +36,8 @@ from dateutil import parser as date_parser
 import psycopg2
 import os
 import json
+from activity_GUI import DashboardPanel  # Assuming this is your DashboardPanel file
+
 
 load_dotenv()
 
@@ -177,7 +179,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("J.A.R.V.I.S")
         # self.setGeometry(100, 100, 1600, 1600)  # Increased window size
-        self.setFixedSize(680, 500)
+        self.setFixedSize(680, 550)
 
         # Set the window icon
         self.setWindowIcon(QIcon("icon.png"))
@@ -229,11 +231,17 @@ class MainWindow(QMainWindow):
             )
             button.setFixedSize(140, 34)  # Wider width, smaller height
 
+        self.screen_time_button = QPushButton("Screen Time")
+        self.screen_time_button.setStyleSheet(self.reminders_button.styleSheet())
+        self.screen_time_button.setFixedSize(140, 34)
+        self.screen_time_button.clicked.connect(self.show_screen_time)
+
         # Add buttons to the layout
         button_layout.addWidget(self.automation_button)
         button_layout.addWidget(self.patterns_button)
         button_layout.addWidget(self.chat_bot_button)
         button_layout.addWidget(self.reminders_button)
+        button_layout.addWidget(self.screen_time_button)
 
         main_layout.addLayout(button_layout)
 
@@ -1011,3 +1019,20 @@ class MainWindow(QMainWindow):
             self.load_reminders()
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to create reminder: {e}")
+
+    def show_screen_time(self):
+        from global_tracker import (
+            tracker_instance,
+        )  # ✅ Assuming tracker_instance is imported here
+
+        activity_data = tracker_instance.get_activity_data()
+
+        # If panel already exists, remove and refresh it
+        if hasattr(self, "screen_time_panel"):
+            self.panel_stack.removeWidget(self.screen_time_panel)
+            self.screen_time_panel.deleteLater()
+
+        # ⚠️ Pass both activity_data and tracker_instance
+        self.screen_time_panel = DashboardPanel(activity_data, tracker_instance)
+        self.panel_stack.addWidget(self.screen_time_panel)
+        self.panel_stack.setCurrentWidget(self.screen_time_panel)
