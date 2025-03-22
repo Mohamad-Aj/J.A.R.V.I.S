@@ -391,6 +391,8 @@ def check_existing_user():
 
 def launch_main_window():
     """Launch the main window."""
+    from process_suggest import start_idle_tracking
+
     print("Launching main application...")  # Debug statement
     main_window = MainWindow()
     floating_circle = FloatingCircle(main_window)
@@ -409,6 +411,12 @@ def launch_main_window():
 
     floating_circle.move(200, 200)
     floating_circle.show()
+
+    popup_refs = []
+    ui_context = {"popup_refs": popup_refs}
+
+    start_idle_tracking(ui_context)
+    print("[DEBUG] Starting idle app checker thread...")
 
 
 if __name__ == "__main__":
