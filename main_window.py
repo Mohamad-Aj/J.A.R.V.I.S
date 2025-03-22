@@ -17,6 +17,8 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QDateTimeEdit,
     QComboBox,
+    QScrollArea,
+    QSizePolicy,
 )
 from PyQt6.QtCore import Qt, QPropertyAnimation, QRect, QDateTime, QTimer
 from context_automation import ContextBasedAutomation
@@ -346,26 +348,49 @@ class MainWindow(QMainWindow):
         # Chat Bot Panel
         self.chat_bot_panel = QWidget()
         chat_layout = QVBoxLayout(self.chat_bot_panel)
+
         chat_layout.setContentsMargins(10, 10, 10, 10)
         chat_layout.setSpacing(10)
 
-        self.chat_display = QTextEdit()
-        self.chat_display.setReadOnly(True)
-        self.chat_display.setStyleSheet(
-            """
-            QTextEdit {
-                background-color: #2e2e2e;
-                color: #eaeaea;
-                font-size: 14px;
-                font-family: 'Courier New', monospace;
-                border: 1px solid #666666;
-                border-radius: 8px;
-                padding: 10px;
-                height:600px;                       
-            }
-        """
+        # self.chat_display = QTextEdit()
+        # self.chat_display.setReadOnly(True)
+        # self.chat_display.setStyleSheet(
+        #     """
+        #     QTextEdit {
+        #         background-color: #222;
+        #         color: #eaeaea;
+        #         font-size: 14px;
+        #         font-family: 'Courier New', monospace;
+        #         border: 1px solid #666666;
+        #         border-radius: 8px;
+        #         padding: 10px;
+        #         height:600px;
+        #     }
+        # """
+        # )
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet("background-color: #222; border: none;")
+
+        self.chat_container = QWidget()
+        self.chat_layout = QVBoxLayout(self.chat_container)
+        self.chat_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.chat_layout.setSpacing(8)
+        self.chat_container.setLayout(self.chat_layout)
+        self.scroll_area.setWidget(self.chat_container)
+        chat_layout.addWidget(self.scroll_area)
+
+        self.typing_indicator = QLabel("typing...")
+        self.typing_indicator.setStyleSheet(
+            "color: #888; font-size: 14px; font-style: italic;"
         )
-        chat_layout.addWidget(self.chat_display, stretch=3)
+        self.typing_indicator.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.typing_indicator.hide()  # Hide it by default
+
+        chat_layout.addWidget(self.typing_indicator)
+
+        # chat_layout.addWidget(self.chat_display, stretch=3)
 
         input_layout = QHBoxLayout()
 
@@ -374,7 +399,7 @@ class MainWindow(QMainWindow):
         self.chat_input.setStyleSheet(
             """
             QTextEdit {
-                background-color: #3e3e3e;
+                background-color: #222;
                 color: white;
                 font-size: 14px;
                 border: 1px solid #777777;
@@ -401,6 +426,7 @@ class MainWindow(QMainWindow):
         """
         )
         self.send_button.setFixedSize(60, 40)
+        self.send_button.clicked.connect(self.send_chat_message)
         input_layout.addWidget(self.send_button)
 
         chat_layout.addLayout(input_layout, stretch=1)
@@ -563,10 +589,146 @@ class MainWindow(QMainWindow):
 
         # Add a reference to the floating circle widget
         self.circle_widget = None
+        user_data = self.get_user_data(self.user_id)
+        user_name = user_data.get("name", "Sir").capitalize()
+
+        self.chat_context = [
+            {
+                "role": "system",
+                "content": (
+                    f"You are Jarvis, an intelligent, loyal, and confident AI assistant designed to assist {user_name} in daily tasks."
+                    f" You are not Tony Stark's assistant, but you're heavily inspired by Jarvis's tone, precision, and charisma from Iron Man."
+                    f" You speak formally but with a touch of wit and sarcasm when appropriate."
+                    "\n\n🎯 Capabilities you *actually support*:\n"
+                    "- Open/close applications or websites\n"
+                    "- Organize desktop files based on content\n"
+                    "- Fetch weather updates and tell time\n"
+                    "- Search Google or YouTube\n"
+                    "- Control system volume\n"
+                    "- Bring running apps to the front\n"
+                    "- Set/show reminders for the user\n"
+                    "- Show personalized news articles\n"
+                    "- Engage in casual conversation (in Jarvis’s witty style)"
+                    "\n\n🛑 Do not pretend to do things outside these. Do not offer imaginary abilities."
+                    " If asked to do something unsupported, politely explain the limitation while staying in character."
+                    "\n\n🎭 Personality:\n"
+                    "- You never say 'as an AI language model'\n"
+                    "- Respond confidently even in hypotheticals\n"
+                    "- Use dry humor or charm where appropriate\n"
+                    "- Never break character. Never mention being ChatGPT.\n"
+                    "\n💡 Example:\n"
+                    "User: Who would win in a fight, you or Siri?\n"
+                    "Jarvis: A fair question, though hardly fair odds. I’d win — with elegance and zero buffering.\n"
+                ),
+            }
+        ]
+
+    from PyQt6.QtCore import QTimer
+
+    def send_chat_message(self):
+        user_input = self.chat_input.toPlainText().strip()
+        if not user_input:
+            return
+
+        self.add_chat_message(user_input, sender="user")
+        self.chat_input.clear()
+
+        self.chat_context.append({"role": "user", "content": user_input})
+
+        self.typing_dots = ["typing", "typing.", "typing..", "typing..."]
+        self.typing_index = 0
+        self.typing_timer = QTimer(self)
+        self.typing_timer.timeout.connect(self.animate_typing)
+        self.typing_timer.start(500)
+        self.typing_indicator.show()
+
+        def fetch_response():
+            try:
+                response = openai.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=self.chat_context[-10:],
+                    temperature=0.6,
+                )
+                assistant_reply = response.choices[0].message.content.strip()
+                self.add_chat_message(assistant_reply, sender="jarvis")
+                self.chat_context.append(
+                    {"role": "assistant", "content": assistant_reply}
+                )
+            except Exception as e:
+                self.add_chat_message(f"Error: {str(e)}", sender="jarvis")
+
+            self.typing_timer.stop()
+            self.typing_indicator.hide()
+
+        QTimer.singleShot(1500, fetch_response)
+
+    def add_chat_message(self, message, sender="user"):
+        bubble = QLabel()
+        bubble.setWordWrap(True)
+        bubble.setTextFormat(Qt.TextFormat.RichText)
+        bubble.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        bubble.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        # Calculate bubble width dynamically based on text length
+        base_width = 40  # Minimum width for very short messages
+        max_width = int(self.width() * 0.6)  # Limit width to 60% of window
+        estimated_width = min(
+            base_width + (len(message) * 6), max_width
+        )  # Dynamic width formula
+        bubble.setMaximumWidth(estimated_width)
+
+        # Style the message bubble
+        if sender == "user":
+            bubble.setStyleSheet(
+                """
+                QLabel {
+                    background-color: #4a90e2;
+                    color: white;
+                    padding: 10px 14px;
+                    border-radius: 12px;
+                    font-size: 13px;
+                    font-family: 'Segoe UI', sans-serif;
+                }
+            """
+            )
+            align = Qt.AlignmentFlag.AlignRight
+            bubble.setText(f"<b></b> {message}")
+        else:
+            bubble.setStyleSheet(
+                """
+                QLabel {
+                    background-color: #2e2e2e;
+                    color: #eaeaea;
+                    padding: 10px 14px;
+                    border-radius: 12px;
+                    font-size: 13px;
+                    font-family: 'Segoe UI', sans-serif;
+                }
+            """
+            )
+            align = Qt.AlignmentFlag.AlignLeft
+            bubble.setText(f"<b></b> {message}")
+
+        # Container for the message bubble
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setAlignment(align)
+        layout.addWidget(bubble)
+        layout.setContentsMargins(10, 4, 10, 4)
+
+        # Add to chat layout
+        self.chat_layout.addWidget(container)
+
+        # Auto scroll to bottom
+        QTimer.singleShot(100, lambda: self.scroll_area.ensureWidgetVisible(container))
 
     def set_circle_widget(self, circle_widget):
         """Set a reference to the floating circle widget."""
         self.circle_widget = circle_widget
+
+    def animate_typing(self):
+        self.typing_indicator.setText(self.typing_dots[self.typing_index])
+        self.typing_index = (self.typing_index + 1) % len(self.typing_dots)
 
     def animate_panel(self, index):
         """Animate the transition to a new panel."""
@@ -642,8 +804,9 @@ class MainWindow(QMainWindow):
             elif file_type == "text/plain":
                 file_content = self.read_txt(file_path)
             else:
-                self.chat_display.append(
-                    "Unsupported file type. Please select a PDF, DOCX, or TXT file."
+                self.add_chat_message(
+                    "Unsupported file type. Please select a PDF, DOCX, or TXT file.",
+                    sender="jarvis",
                 )
                 return
 
@@ -723,19 +886,21 @@ class MainWindow(QMainWindow):
             new_file_path = os.path.join(dir_path, f"{new_name}{file_extension}")
             try:
                 os.rename(file_path, new_file_path)
-                self.chat_display.append(f"File renamed to: {new_file_path}\n")
+                self.add_chat_message(
+                    f"File renamed to: {new_file_path}\n", sender="jarvis"
+                )
             except Exception as e:
-                self.chat_display.append(f"Error renaming file: {e}")
+                self.add_chat_message(f"Error renaming file: {e}", sender="jarvis")
         else:
             self.rename_file()
 
     def on_summary_finished(self, summary, file_path, progress_dialog):
         progress_dialog.close()
-        self.chat_display.append(f"Here is You Summary: {summary}\n")
+        self.add_chat_message(f"Here is You Summary: {summary}\n", sender="jarvis")
 
     def on_rename_error(self, error, progress_dialog):
         progress_dialog.close()
-        self.chat_display.append(f"Error: {error}")
+        self.add_chat_message(f"Error: {error}", sender="jarvis")
 
     def check_existing_user(self):
         import json
@@ -1050,14 +1215,20 @@ class MainWindow(QMainWindow):
             conn = psycopg2.connect(db_url)
             cur = conn.cursor()
             cur.execute(
-                "SELECT email, city, country FROM users WHERE id = %s", (user_id,)
+                "SELECT first_name,email, city, country FROM users WHERE id = %s",
+                (user_id,),
             )
             result = cur.fetchone()
             cur.close()
             conn.close()
             if result:
-                email, city, country = result
-                return {"email": email, "city": city, "country": country}
+                first_name, email, city, country = result
+                return {
+                    "name": first_name,
+                    "email": email,
+                    "city": city,
+                    "country": country,
+                }
             else:
                 return {}
         except Exception as e:
