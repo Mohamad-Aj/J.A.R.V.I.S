@@ -63,9 +63,9 @@ class ActivityTracker:
             app = self.get_foreground_app()
             now = datetime.datetime.now()
 
-            print(
-                f"[TRACKER] ⏱️ {now.strftime('%H:%M:%S')} - App: {app} | Idle: {idle_secs:.1f}s"
-            )
+            # print(
+            #     f"[TRACKER] ⏱️ {now.strftime('%H:%M:%S')} - App: {app} | Idle: {idle_secs:.1f}s"
+            # )
 
             with self.lock:
                 if idle_secs < 60:
