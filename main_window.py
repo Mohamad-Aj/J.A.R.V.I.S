@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QDateTimeEdit,
     QComboBox,
 )
-from PyQt6.QtCore import Qt, QPropertyAnimation, QRect, QDateTime
+from PyQt6.QtCore import Qt, QPropertyAnimation, QRect, QDateTime, QTimer
 from context_automation import ContextBasedAutomation
 import keyboard
 import time
@@ -42,6 +42,34 @@ from activity_GUI import DashboardPanel  # Assuming this is your DashboardPanel 
 load_dotenv()
 
 import mimetypes
+
+
+class ReminderLoaderWorker(QThread):
+    finished = pyqtSignal(list)  # Emits loaded reminders
+
+    def __init__(self, reminder_system, user_id):
+        super().__init__()
+        self.reminder_system = reminder_system
+        self.user_id = user_id
+
+    def run(self):
+        reminders = self.reminder_system.get_upcoming_reminders(self.user_id)
+        self.finished.emit(reminders)
+
+
+class ScreenTimeLoader(QThread):
+    finished = pyqtSignal(QWidget)
+
+    def __init__(self, tracker_instance, parent=None):
+        super().__init__(parent)
+        self.tracker_instance = tracker_instance
+
+    def run(self):
+        from global_tracker import tracker_instance
+
+        activity_data = self.tracker_instance.get_activity_data()
+        dashboard = DashboardPanel(activity_data, self.tracker_instance)
+        self.finished.emit(dashboard)
 
 
 class SummarizeFileWorker(QThread):
@@ -250,8 +278,7 @@ class MainWindow(QMainWindow):
         self.panel_stack.setStyleSheet(
             """
             QStackedWidget {
-                background-color: #333333;
-                border: 1px solid #555555;
+                background-color: #222;;
                 border-radius: 10px;
                 padding: 20px;
             }
@@ -262,7 +289,7 @@ class MainWindow(QMainWindow):
         # Create a new Automation Panel with a grid layout
         self.automation_panel = QWidget()
         automation_layout = QVBoxLayout(self.automation_panel)
-        self.automation_panel.setStyleSheet("background-color: #333333;")
+        self.automation_panel.setStyleSheet("background-color: #222;")
 
         # Create a horizontal layout for button and info icon
         button_layout = QHBoxLayout()
@@ -561,8 +588,16 @@ class MainWindow(QMainWindow):
         self.show_panel(index)
 
     def show_panel(self, index):
-        """Show the panel at the given index."""
-        self.panel_stack.setCurrentIndex(index)
+        if index == 3:  # Reminders Panel
+            self.show_loading_screen("🔄 Loading Reminders...")
+
+            self.reminder_loader_thread = ReminderLoaderWorker(
+                self.reminder_system, self.user_id
+            )
+            self.reminder_loader_thread.finished.connect(self.on_reminders_loaded)
+            self.reminder_loader_thread.start()
+        else:
+            self.panel_stack.setCurrentIndex(index)
 
     def list_apps(self):
         dialog = ListAppsDialog(self)
@@ -882,6 +917,60 @@ class MainWindow(QMainWindow):
             self.reminders_list.addItem(item)
             self.reminders_list.setItemWidget(item, widget)
 
+    def on_reminders_loaded(self, reminders):
+        self.reminders_list.clear()
+
+        for reminder in reminders:
+            reminder_id, title, priority, dt = reminder
+            display_text = f"{dt.strftime('%Y-%m-%d %H:%M')} - {title} ({priority})"
+
+            widget = QWidget()
+            layout = QHBoxLayout(widget)
+            layout.setContentsMargins(10, 10, 10, 10)
+            layout.setSpacing(10)
+
+            label = QLabel(display_text)
+            label.setStyleSheet("color: white;")
+            label.setFixedHeight(40)
+
+            edit_button = QPushButton("✏️")
+            edit_button.setFixedSize(50, 30)
+            edit_button.setStyleSheet(
+                "QPushButton { background-color: #ffffff; border-radius: 5px; }"
+            )
+            edit_button.clicked.connect(
+                lambda checked=False, rid=reminder_id: self.handle_edit_reminder(rid)
+            )
+
+            delete_button = QPushButton()
+            delete_button.setIcon(qta.icon("fa.trash", color="white"))
+            delete_button.setFixedSize(30, 30)
+            delete_button.setStyleSheet(
+                "QPushButton { background-color: #ff5555; border-radius: 5px; }"
+            )
+            delete_button.clicked.connect(
+                lambda checked, rid=reminder_id: self.handle_delete_reminder(rid)
+            )
+
+            layout.addWidget(label)
+            layout.addStretch()
+            layout.addWidget(edit_button)
+            layout.addWidget(delete_button)
+
+            item = QListWidgetItem()
+            item.setSizeHint(widget.sizeHint())
+            item.setData(Qt.ItemDataRole.UserRole, reminder_id)
+
+            self.reminders_list.addItem(item)
+            self.reminders_list.setItemWidget(item, widget)
+
+        self.panel_stack.setCurrentWidget(self.reminders_panel)
+
+        if hasattr(self, "loading_widget"):
+            self.panel_stack.removeWidget(self.loading_widget)
+            self.loading_widget.deleteLater()
+            del self.loading_widget
+
     def handle_edit_reminder(self, reminder_id):
         reminder = self.reminder_system.get_reminder_by_id(reminder_id)
         if not reminder:
@@ -1021,18 +1110,42 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", f"Failed to create reminder: {e}")
 
     def show_screen_time(self):
-        from global_tracker import (
-            tracker_instance,
-        )  # ✅ Assuming tracker_instance is imported here
+        from global_tracker import tracker_instance  # ✅ your existing tracker
+        from screen_time_worker import ScreenTimeWorker  # ✅ the worker
 
-        activity_data = tracker_instance.get_activity_data()
+        # Show loading screen or message (optional)
+        loading_msg = QLabel("⏳ Collecting data...")
+        loading_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        loading_msg.setStyleSheet("color: white; font-size: 18px;")
+        self.panel_stack.addWidget(loading_msg)
+        self.panel_stack.setCurrentWidget(loading_msg)
 
-        # If panel already exists, remove and refresh it
+        # Start background worker
+        self.worker = ScreenTimeWorker(tracker_instance)
+        self.worker.data_ready.connect(self.display_screen_time)
+        self.worker.start()
+
+    def display_screen_time(self, activity_data):
+        from global_tracker import tracker_instance
+
         if hasattr(self, "screen_time_panel"):
             self.panel_stack.removeWidget(self.screen_time_panel)
             self.screen_time_panel.deleteLater()
 
-        # ⚠️ Pass both activity_data and tracker_instance
         self.screen_time_panel = DashboardPanel(activity_data, tracker_instance)
         self.panel_stack.addWidget(self.screen_time_panel)
         self.panel_stack.setCurrentWidget(self.screen_time_panel)
+
+    def show_loading_screen(self, message="Loading..."):
+        loading_label = QLabel(message)
+        loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        loading_label.setStyleSheet("font-size: 18px; color: white;")
+
+        self.loading_widget = QWidget()
+        layout = QVBoxLayout(self.loading_widget)
+        layout.addStretch()
+        layout.addWidget(loading_label)
+        layout.addStretch()
+
+        self.panel_stack.addWidget(self.loading_widget)
+        self.panel_stack.setCurrentWidget(self.loading_widget)

@@ -10,15 +10,13 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import psutil
 import win32gui
 import win32process
 import plotly.graph_objs as go
 from plotly.offline import plot
-
-
-# ... all imports remain the same ...
 
 
 class DashboardPanel(QWidget):
@@ -31,11 +29,16 @@ class DashboardPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        title = QLabel("📊 System Activity Summary")
-        title.setStyleSheet("font-size: 20px; font-weight: bold;")
-        layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.title = QLabel("📊 System Activity Summary")
+
+        self.title.setStyleSheet("font-size: 20px; font-weight: bold;")
+        layout.addWidget(self.title, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.carousel = QStackedWidget()
+        self.carousel.currentChanged.connect(self.update_title_based_on_page)
+        self.carousel.setCurrentIndex(0)
+        self.update_title_based_on_page(0)
+
         layout.addWidget(self.carousel)
 
         self.bar_chart = self.create_plotly_bar_chart()
@@ -66,6 +69,8 @@ class DashboardPanel(QWidget):
 
         # 👇 Force render the first chart to fix white screen
         self.carousel.setCurrentIndex(0)
+        # Delay fix for white screen in first graph (bar)
+        QTimer.singleShot(100, self.force_reload_first_chart)
 
     def go_previous(self):
         self.carousel.setCurrentIndex(
@@ -76,6 +81,19 @@ class DashboardPanel(QWidget):
         self.carousel.setCurrentIndex(
             (self.carousel.currentIndex() + 1) % self.carousel.count()
         )
+
+    def force_reload_first_chart(self):
+        # Force re-render of first graph to fix white screen bug
+        self.carousel.setCurrentIndex(1)
+        QTimer.singleShot(100, lambda: self.carousel.setCurrentIndex(0))
+
+    def update_title_based_on_page(self, index):
+        if index == 0:
+            self.title.setText("📈 Screen Time Per Hour")
+        elif index == 1:
+            self.title.setText("📊 App Usage Share")
+        elif index == 2:
+            self.title.setText("💻 Live Task Manager")
 
     def create_plotly_bar_chart(self):
         hourly_usage = [0] * 24
@@ -90,7 +108,7 @@ class DashboardPanel(QWidget):
             ]
         )
         fig.update_layout(
-            title="📈 Screen Time Per Hour",
+            # title="📈 Screen Time Per Hour",
             xaxis_title="Hour of Day",
             yaxis_title="Minutes",
             plot_bgcolor="#222",
@@ -101,7 +119,7 @@ class DashboardPanel(QWidget):
         html = plot(fig, output_type="div", include_plotlyjs="cdn")
         view = QWebEngineView()
         view.setHtml(html)
-        view.setFixedHeight(300)  # 🔥 Make it taller
+        view.setFixedHeight(280)  # 🔥 Make it taller
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -124,7 +142,7 @@ class DashboardPanel(QWidget):
             ]
         )
         fig.update_layout(
-            title="📊 App Usage Share",
+            # title="📊 App Usage Share",
             paper_bgcolor="#222",
             font=dict(color="white"),
         )
@@ -132,7 +150,7 @@ class DashboardPanel(QWidget):
         html = plot(fig, output_type="div", include_plotlyjs="cdn")
         view = QWebEngineView()
         view.setHtml(html)
-        view.setFixedHeight(300)  # 🔥 Make it taller
+        view.setFixedHeight(280)  # 🔥 Make it taller
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -143,9 +161,9 @@ class DashboardPanel(QWidget):
         container = QWidget()
         layout = QVBoxLayout(container)
 
-        title = QLabel("💻 Live Task Manager (Visible Apps Only)")
-        title.setStyleSheet("font-size: 16px; font-weight: bold;")
-        layout.addWidget(title)
+        # title = QLabel("💻 Live Task Manager (Visible Apps Only)")
+        # title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        # layout.addWidget(title)
 
         self.process_table = QTableWidget()
         self.process_table.setColumnCount(4)
