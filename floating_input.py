@@ -2,6 +2,14 @@ from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLineEdit, QPushButton
 from PyQt6.QtCore import Qt, QSize, QPoint
 import qtawesome as qta
 
+from vision_ocr import SmartFormFiller
+from ReminderSystem import ReminderSystem
+import os
+import threading
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 class FloatingInputBar(QWidget):
     def __init__(self, parent=None):
@@ -68,6 +76,9 @@ class FloatingInputBar(QWidget):
         layout.addWidget(self.send_button)
 
         self.hide()
+        self.filler = SmartFormFiller("jarvis-ocr.json")
+        self.reminder_system = ReminderSystem()
+        self.openai_key = os.getenv("OPENAI_API_KEY")
 
     # Make draggable
     def mousePressEvent(self, event):
@@ -97,3 +108,22 @@ class FloatingInputBar(QWidget):
         ):
             self.mouseReleaseEvent(event)
         return super().eventFilter(source, event)
+
+    def handle_send_input(self):
+        text = self.input_field.text().strip().lower()
+        if text == "create reminder":
+            print("🧠 Triggering reminder from screen...")
+            # filler = SmartFormFiller("jarvis-ocr.json")
+            # reminder_system = ReminderSystem()
+            # openai_key = os.getenv("OPENAI_API_KEY")
+            threading.Thread(
+                target=self.filler.create_reminder_from_screen,
+                args=(self.reminder_system, self.openai_key),
+                daemon=True,
+            ).start()
+            self.input_field.clear()
+            self.hide()
+        elif text:
+            print(f"📤 Input sent: {text}")
+            self.input_field.clear()
+            self.hide()

@@ -26,6 +26,10 @@ import keyboard  # For global hotkey
 from PyQt6.QtCore import pyqtSignal
 from audio_assistance import JarvisAssistant
 from floating_input import FloatingInputBar
+from vision_ocr import SmartFormFiller
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class FloatingCircle(QWidget):
@@ -249,12 +253,12 @@ class FloatingCircle(QWidget):
             self.input_bar.input_field.setFocus()
 
     def handle_send_input(self):
-        text = self.input_bar.input_field.text().strip()
-        if text:
-            print(f"📤 Input sent: {text}")
-            # You can send it to the main app or chatbot
-            self.input_bar.input_field.clear()
-            self.input_bar.hide()
+        self.input_bar.handle_send_input()
+        # if text:
+        #     print(f"📤 Input sent: {text}")
+        #     # You can send it to the main app or chatbot
+        #     self.input_bar.input_field.clear()
+        #     self.input_bar.hide()
 
     def process_send_message(self):
         text = self.input_bar.text().strip()

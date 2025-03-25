@@ -10,6 +10,7 @@ import io
 import openai
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from dateutil import parser as date_parser
 
 
 class SmartFormFiller:
@@ -262,8 +263,98 @@ class SmartFormFiller:
             print(f"❌ Failed to get URL: {e}")
             return None
 
+    def create_reminder_from_screen(self, reminder_system, openai_key):
+        from google_calendar import add_event_to_calendar
 
-if __name__ == "__main__":
-    filler = SmartFormFiller("jarvis-ocr.json")
-    openai_key = os.getenv("OPENAI_API_KEY")
-    filler.run("jarvis-ocr.json", openai_key)
+        user_id = self.get_user_id()
+        if not user_id:
+            print("❌ User ID not found.")
+            return
+
+        print("📸 Taking screenshot...")
+        screenshot = self.take_screenshot("reminder_screenshot.png")
+        annotations = self.extract_text_annotations(screenshot)
+        all_text = "\n".join([a.description for a in annotations])
+
+        now = datetime.now()
+        formatted_now = now.strftime("%Y-%m-%d %H:%M:%S")
+
+        prompt = f"""
+        You are a reminder assistant. The following is extracted from a message/screenshot of a conversation/email/document:
+        Below is the full message history:
+
+        --- START MESSAGE ---
+        {all_text}
+        --- END MESSAGE ---
+
+        Today's date/time: {formatted_now}
+        🎯 Your task:
+        - Analyze the conversation.
+        - Understand which message is the **actual confirmed reminder**.
+        - Ignore suggestions or options unless they are agreed upon.
+
+        🧠 Output must be a JSON in this format:
+        {{
+        "title": "...",           # Summary of the reminder (in the **same language** as the original message)
+        "priority": "low/medium/high",
+        "datetime": "ISO format like 2025-03-10T16:00:00"
+        }}
+
+        ⚠️ VERY IMPORTANT:
+        - If the reminder message is in Hebrew, Arabic, or any other language, write the title in **that exact same language**.
+        - Do NOT translate the title to English.
+        - NEVER include the time inside the title string.
+        - If no time is mentioned, assume today at {formatted_now}.
+        - If the time mentioned has already passed today, assume it’s for tomorrow.
+
+        Return **only** the JSON output. Do not include explanations or extra text.
+
+        """
+
+        try:
+            openai.api_key = openai_key
+            response = openai.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful reminder assistant.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+            )
+            content = response.choices[0].message.content.strip()
+            print("🔍 GPT-4o response:", content)
+
+            import re
+
+            # Try extracting JSON from within code block
+            match = re.search(r"\{.*?\}", content, re.DOTALL)
+            if match:
+                json_str = match.group(0)
+            else:
+                json_str = content  # fallback
+
+            try:
+                data = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                print(f"❌ JSON parsing error: {e}")
+                return
+
+            dt = date_parser.parse(data["datetime"])
+            reminder_system.create_reminder(
+                user_id, data["title"], data["priority"], dt.isoformat()
+            )
+
+            # 📅 Add to Google Calendar
+            user_data = self.get_user_data(user_id)
+            email = user_data.get("email")
+            if email:
+                add_event_to_calendar(
+                    email, data["title"], f"Priority: {data['priority']}", dt
+                )
+
+        except Exception as e:
+            print(f"❌ Failed to create reminder from screen: {e}")
+
