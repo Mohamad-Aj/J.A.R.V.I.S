@@ -7,3 +7,5 @@ __pycache__
 test-db.py
 output_contents.txt
 token*
+reminder_screenshot.png
+jarvis-ocr.json
