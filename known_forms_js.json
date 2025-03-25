@@ -1,0 +1,32 @@
+{
+    "https://www.amazon.com/gp/buy/addressselect/handlers/display.html": {
+        "Full name": {
+            "selector": "input[name='address-ui-widgets-enterAddressFullName']",
+            "key": "full_name"
+        },
+        "Street address": {
+            "selector": "input[name='address-ui-widgets-enterAddressLine1']",
+            "key": "street_name"
+        },
+        "Apartment": {
+            "selector": "input[name='address-ui-widgets-enterAddressLine2']",
+            "key": "house_apartment"
+        },
+        "City": {
+            "selector": "input[name='address-ui-widgets-enterAddressCity']",
+            "key": "city"
+        },
+        "State / Province / Region": {
+            "selector": "input[name='address-ui-widgets-enterAddressStateOrRegion']",
+            "key": "state"
+        },
+        "Zip Code": {
+            "selector": "input[name='address-ui-widgets-enterAddressPostalCode']",
+            "key": "zip_code"
+        },
+        "Phone number": {
+            "selector": "input[name='address-ui-widgets-enterAddressPhoneNumber']",
+            "key": "phone"
+        }
+    }
+}

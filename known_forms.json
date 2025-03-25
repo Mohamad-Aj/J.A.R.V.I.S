@@ -1,0 +1,73 @@
+{
+    "https://www.amazon.com/ap/register": {
+        "Your name": {
+            "x": 1210,
+            "y": 375,
+            "key": "full_name"
+        },
+        "Mobile number or email": {
+            "x": 1210,
+            "y": 500,
+            "key": "email"
+        },
+        "Password": {
+            "x": 1210,
+            "y": 630,
+            "key": "password"
+        },
+        "Re-enter password": {
+            "x": 1210,
+            "y": 830,
+            "key": "password"
+        }
+    },
+    "https://www.amazon.com/gp/buy/addressselect/handlers/display.html": {
+        "Full name": {
+            "key": "full_name",
+            "x": 500,
+            "y": 655
+        },
+        "Street address": {
+            "key": "street_name",
+            "x": 500,
+            "y": 790
+        },
+        "Apartment": {
+            "key": "house_apartment",
+            "x": 500,
+            "y": 875
+        },
+        "City": {
+            "key": "city",
+            "x": 500,
+            "y": 1010
+        },
+        "Zip Code": {
+            "key": "zip_code",
+            "x": 500,
+            "y": 1290
+        },
+        "Phone number": {
+            "key": "phone",
+            "x": 500,
+            "y": 1420
+        }
+    },
+    "https://www.instagram.com/accounts/emailsignup/": {
+        "Mobile number or email": {
+            "x": 1300,
+            "y": 740,
+            "key": "email"
+        },
+        "Full Name": {
+            "x": 1300,
+            "y": 915,
+            "key": "full_name"
+        },
+        "Password": {
+            "x": 1300,
+            "y": 830,
+            "key": "password"
+        }
+    }
+}

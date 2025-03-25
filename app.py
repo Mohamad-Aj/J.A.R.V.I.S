@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QPushButton,
     QLabel,
+    QLineEdit,
 )
 from PyQt6.QtCore import Qt, QTimer, QPoint, QPropertyAnimation, QEasingCurve, QSize
 from PyQt6.QtGui import QPainter, QBrush, QColor, QPen, QRadialGradient
@@ -24,6 +25,11 @@ from main_window import MainWindow
 import keyboard  # For global hotkey
 from PyQt6.QtCore import pyqtSignal
 from audio_assistance import JarvisAssistant
+from floating_input import FloatingInputBar
+from vision_ocr import SmartFormFiller
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class FloatingCircle(QWidget):
@@ -68,6 +74,8 @@ class FloatingCircle(QWidget):
         self.button_animations = []  # Animations for sliding reveal
         self.buttons_visible = False  # Track visibility state
         self.init_buttons_around_circle()
+        self.input_bar = FloatingInputBar(parent=self.parent())
+        self.input_bar.send_button.clicked.connect(self.handle_send_input)
 
         # Minimized state
         self.is_minimized = False
@@ -78,9 +86,40 @@ class FloatingCircle(QWidget):
         # Thread lock for synchronized operations
         self.lock = threading.Lock()
 
+        # Input bar for send functionality
+
     def setup_global_shortcut(self):
         """Set up a global shortcut using the keyboard library."""
         keyboard.add_hotkey("ctrl+shift+j", self.restore_circle)
+
+    def init_input_bar(self):
+        from PyQt6.QtWidgets import QLineEdit
+
+        self.input_bar = QLineEdit(self.parent())
+        self.input_bar.setPlaceholderText("Type a message...")
+        self.input_bar.setStyleSheet(
+            """
+            QLineEdit {
+                background-color: #1e1e1e;
+                color: white;
+                border: 2px solid #888;
+                border-radius: 8px;
+                padding: 6px;
+                font-size: 13px;
+            }
+        """
+        )
+        self.input_bar.setFixedSize(180, 30)
+
+        # Position the input below the circle (centered)
+        self.input_bar.move(
+            self.width() // 2 - 90, self.height() - 40
+        )  # 90 is half width
+
+        self.input_bar.hide()
+        self.input_bar.returnPressed.connect(self.process_send_message)
+
+        print("✅ Input bar initialized")
 
     def init_buttons_around_circle(self):
         """Initialize the buttons in a semi-circular layout along the upper half of the circle."""
@@ -202,7 +241,31 @@ class FloatingCircle(QWidget):
         self.app_window.show()
 
     def handle_send_click(self):
-        print("Send button clicked!")
+        print("📨 Send icon clicked")
+        if self.input_bar.isVisible():
+            self.input_bar.hide()
+        else:
+            # Position it just below the floating circle
+            global_pos = self.mapToGlobal(self.rect().bottomLeft())
+            self.input_bar.move(global_pos.x() - 50, global_pos.y() + 10)
+            self.input_bar.show()
+            self.input_bar.raise_()
+            self.input_bar.input_field.setFocus()
+
+    def handle_send_input(self):
+        self.input_bar.handle_send_input()
+        # if text:
+        #     print(f"📤 Input sent: {text}")
+        #     # You can send it to the main app or chatbot
+        #     self.input_bar.input_field.clear()
+        #     self.input_bar.hide()
+
+    def process_send_message(self):
+        text = self.input_bar.text().strip()
+        if text:
+            print(f"✅ Message entered: {text}")
+            self.input_bar.clear()
+            self.input_bar.hide()
 
     def handle_close_click(self):
         self.hide_circle()
@@ -332,6 +395,8 @@ def check_existing_user():
 
 def launch_main_window():
     """Launch the main window."""
+    from process_suggest import start_idle_tracking
+
     print("Launching main application...")  # Debug statement
     main_window = MainWindow()
     floating_circle = FloatingCircle(main_window)
@@ -350,6 +415,12 @@ def launch_main_window():
 
     floating_circle.move(200, 200)
     floating_circle.show()
+
+    popup_refs = []
+    ui_context = {"popup_refs": popup_refs}
+
+    start_idle_tracking(ui_context)
+    print("[DEBUG] Starting idle app checker thread...")
 
 
 if __name__ == "__main__":
