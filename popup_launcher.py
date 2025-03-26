@@ -7,7 +7,7 @@ from playsound import playsound
 
 
 class ReminderPopup(QWidget):
-    def __init__(self, title, reminder_id, reminder_system):
+    def __init__(self, title, reminder_id=None, reminder_system=None):
         super().__init__()
         self.reminder_id = reminder_id
         self.reminder_system = reminder_system
@@ -42,6 +42,7 @@ class ReminderPopup(QWidget):
 
         # Title (not styled as a button)
         label = QLabel(f"{title}")
+        label.setWordWrap(True)
         label.setStyleSheet(
             """
             QLabel {
@@ -107,11 +108,13 @@ class ReminderPopup(QWidget):
             print(f"Sound error: {e}")
 
     def snooze(self):
-        self.reminder_system.snooze_reminder(self.reminder_id, minutes=10)
+        if self.reminder_system and self.reminder_id:
+            self.reminder_system.snooze_reminder(self.reminder_id, minutes=10)
         self.close()
 
     def dismiss(self):
-        self.reminder_system.mark_as_completed(self.reminder_id)
+        if self.reminder_system and self.reminder_id:
+            self.reminder_system.mark_as_completed(self.reminder_id)
         self.close()
 
     def move_to_bottom_right(self):

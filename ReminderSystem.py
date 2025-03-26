@@ -190,7 +190,7 @@ class ReminderSystem:
                         ).start()
                         time.sleep(60)  # prevent multiple popups
 
-                time.sleep(30)
+                time.sleep(60)
 
         threading.Thread(
             target=check_loop, daemon=True

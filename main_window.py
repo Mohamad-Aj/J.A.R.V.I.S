@@ -39,6 +39,7 @@ import psycopg2
 import os
 import json
 from activity_GUI import DashboardPanel  # Assuming this is your DashboardPanel file
+from study_mode import StudyMode
 
 
 load_dotenv()
@@ -204,6 +205,69 @@ class HoverLabel(QLabel):
         super().leaveEvent(event)
 
 
+from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore import Qt, QRectF, QPropertyAnimation, pyqtProperty
+from PyQt6.QtGui import QPainter, QColor, QBrush
+
+
+class AnimatedToggle(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(60, 30)
+        self._position = 2
+        self._checked = False
+        self._animation = QPropertyAnimation(self, b"position", self)
+        self._animation.setDuration(200)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def mousePressEvent(self, event):
+        self._checked = not self._checked
+        self.animate()
+        self.clicked.emit(self._checked)
+
+    def animate(self):
+        end_pos = self.width() - 28 if self._checked else 2
+        self._animation.stop()
+        self._animation.setEndValue(end_pos)
+        self._animation.start()
+
+    def isChecked(self):
+        return self._checked
+
+    def setChecked(self, state):
+        self._checked = state
+        self._position = self.width() - 28 if state else 2
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Background
+        bg_color = QColor("#4CAF50") if self._checked else QColor("#f44336")
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(self.rect(), 15, 15)
+
+        # Handle
+        painter.setBrush(QBrush(QColor("#FFF")))
+        painter.drawEllipse(QRectF(self._position, 2, 26, 26))
+
+    def get_position(self):
+        return self._position
+
+    def set_position(self, pos):
+        self._position = pos
+        self.update()
+
+    position = pyqtProperty(float, fget=get_position, fset=set_position)
+
+    # Custom signal
+    from PyQt6.QtCore import pyqtSignal
+
+    clicked = pyqtSignal(bool)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -266,6 +330,17 @@ class MainWindow(QMainWindow):
         self.screen_time_button.setFixedSize(140, 34)
         self.screen_time_button.clicked.connect(self.show_screen_time)
 
+        toggle_wrapper = QHBoxLayout()
+        toggle_wrapper.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.study_mode_toggle = AnimatedToggle()
+        toggle_info = HoverLabel(
+            "Study Mode", "Enable focus mode with timed breaks and summaries."
+        )
+        self.study_mode_toggle.clicked.connect(self.toggle_study_mode)
+        toggle_wrapper.addWidget(toggle_info)
+        toggle_wrapper.addWidget(self.study_mode_toggle)
+        main_layout.addLayout(toggle_wrapper)
+
         # Add buttons to the layout
         button_layout.addWidget(self.automation_button)
         button_layout.addWidget(self.patterns_button)
@@ -291,6 +366,8 @@ class MainWindow(QMainWindow):
         # Create a new Automation Panel with a grid layout
         self.automation_panel = QWidget()
         automation_layout = QVBoxLayout(self.automation_panel)
+        automation_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        automation_layout.setSpacing(20)  # Space between buttons
         self.automation_panel.setStyleSheet("background-color: #222;")
 
         # Create a horizontal layout for button and info icon
@@ -331,7 +408,7 @@ class MainWindow(QMainWindow):
 
         # Add button layout to automation layout
         automation_layout.addLayout(button_layout)
-        automation_layout.addStretch(1)
+        # automation_layout.addStretch(1)
 
         # Connect the button to the ContextBasedAutomation's organize_desktop function
         organize_button.clicked.connect(self.run_organize_desktop)
@@ -351,23 +428,6 @@ class MainWindow(QMainWindow):
 
         chat_layout.setContentsMargins(10, 10, 10, 10)
         chat_layout.setSpacing(10)
-
-        # self.chat_display = QTextEdit()
-        # self.chat_display.setReadOnly(True)
-        # self.chat_display.setStyleSheet(
-        #     """
-        #     QTextEdit {
-        #         background-color: #222;
-        #         color: #eaeaea;
-        #         font-size: 14px;
-        #         font-family: 'Courier New', monospace;
-        #         border: 1px solid #666666;
-        #         border-radius: 8px;
-        #         padding: 10px;
-        #         height:600px;
-        #     }
-        # """
-        # )
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -572,7 +632,49 @@ class MainWindow(QMainWindow):
         self.reminder_system = ReminderSystem()
         self.user_id = self.check_existing_user()  # Assume this is available
         self.load_reminders()
+        self.study_mode = StudyMode(self.reminder_system, self.user_id, parent=self)
+        self.study_mode.request_file_summary.connect(self.suggest_file_summary)
 
+        # Study Mode Toggle Layout
+        # study_toggle_layout = QHBoxLayout()
+
+        # self.study_mode_toggle = AnimatedToggle()
+        # self.study_mode_toggle.clicked.connect(self.toggle_study_mode)
+
+        # # Info icon
+        # study_info_icon = HoverLabel(
+        #     text="Study Mode",
+        #     description="Enable Study Mode to get file summary popups during idle time.\nGreat for reviewing content passively.",
+        # )
+        # study_info_icon.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+        # study_toggle_layout.addWidget(self.study_mode_toggle)
+        # study_toggle_layout.addWidget(study_info_icon)
+
+        # automation_layout.addLayout(study_toggle_layout)
+
+        # Create layout for Clear History + icon
+        clear_layout = QHBoxLayout()
+
+        # Clear History button
+        clear_button = QPushButton("Clear Summary")
+        clear_button.setStyleSheet(organize_button.styleSheet())
+        clear_button.setFixedSize(160, 40)
+        clear_button.clicked.connect(self.clear_summarized_history)
+
+        # Info icon for Clear History
+        clear_info_icon = HoverLabel(
+            text="Clear Summary History",
+            description="Deletes the list of already summarized files so they can be suggested again.\nUse with caution.",
+        )
+        clear_info_icon.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+        # Add both to layout
+        clear_layout.addWidget(clear_button)
+        clear_layout.addWidget(clear_info_icon)
+        automation_layout.addLayout(clear_layout)
+
+        # button_layout.addWidget(self.study_mode_button)
         # Add panels to stack
         self.panel_stack.addWidget(self.patterns_panel)
         self.panel_stack.addWidget(self.chat_bot_panel)
@@ -624,6 +726,110 @@ class MainWindow(QMainWindow):
         ]
 
     from PyQt6.QtCore import QTimer
+
+    # def ask_user_confirmation(self, path):
+    #     msg = QMessageBox(self)
+    #     msg.setWindowTitle("Confirm File Summary")
+    #     msg.setText(f"Do you want to summarize this file?\n\n{os.path.basename(path)}")
+    #     msg.setStandardButtons(
+    #         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+    #     )
+    #     return msg.exec() == QMessageBox.StandardButton.Yes
+    def clear_summarized_history(self):
+        from PyQt6.QtWidgets import QMessageBox
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("History Cleared")
+
+        if os.path.exists("suggested_files.json"):
+            os.remove("suggested_files.json")
+            msg.setText("✅ Previously summarized files were cleared.")
+        else:
+            msg.setText("ℹ️ No summary history found.")
+
+        # Style the QMessageBox and its buttons
+        msg.setStyleSheet(
+            """
+            QMessageBox {
+                background-color: #2b2b2b;
+                color: white;
+                font-size: 14px;
+            }
+            QPushButton {
+                background-color: white;
+                color: black;
+                border: none;
+                padding: 6px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+        """
+        )
+
+        msg.exec()
+
+    def show_summary_panel(self, path, summary):
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Summary - {os.path.basename(path)}")
+        layout = QVBoxLayout()
+
+        label = QLabel(f"📄 Summary for: {os.path.basename(path)}")
+        text = QTextEdit()
+        text.setPlainText(summary)
+        text.setReadOnly(True)
+        text.setStyleSheet(
+            """
+    QTextEdit {
+        color: white;
+        border: none;
+        font-family: Consolas;
+        font-size: 14px;
+        padding: 10px;
+    }
+"""
+        )
+
+        layout.addWidget(label)
+        layout.addWidget(text)
+        dlg.setLayout(layout)
+        dlg.resize(500, 400)
+        dlg.exec()
+
+    def suggest_file_summary(self):
+        from file_utils import detect_open_files_and_summarize
+
+        detect_open_files_and_summarize(self)
+
+    def show_summary_panel_bulk(self, summaries):
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QTextEdit
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Summaries")
+
+        layout = QVBoxLayout()
+        for path, summary in summaries:
+            label = QLabel(f"📄 {os.path.basename(path)}")
+            text = QTextEdit()
+            text.setPlainText(summary)
+            text.setReadOnly(True)
+            layout.addWidget(label)
+            layout.addWidget(text)
+
+        dlg.setLayout(layout)
+        dlg.resize(600, 600)
+        dlg.exec()
+
+    def toggle_study_mode(self):
+        if self.study_mode.is_active:
+            self.study_mode.deactivate()
+            self.study_mode_toggle.setChecked(False)  # ⬅️ sync toggle state
+            # QMessageBox.information(self, "Study Mode", "Study Mode Deactivated")
+        else:
+            self.study_mode.activate()
+            self.study_mode_toggle.setChecked(True)  # ⬅️ sync toggle state
+            # QMessageBox.information(self, "Study Mode", "Study Mode Activated")
 
     def send_chat_message(self):
         user_input = self.chat_input.toPlainText().strip()
