@@ -394,6 +394,10 @@ def check_existing_user():
 
 
 def launch_main_window():
+
+    from multiprocessing import Process
+    from download_launcher import start_monitor
+
     """Launch the main window."""
     from process_suggest import start_idle_tracking
 
@@ -421,6 +425,9 @@ def launch_main_window():
 
     start_idle_tracking(ui_context)
     print("[DEBUG] Starting idle app checker thread...")
+    monitor_process = Process(target=start_monitor)
+    monitor_process.daemon = True  # dies with main app
+    monitor_process.start()
 
 
 if __name__ == "__main__":

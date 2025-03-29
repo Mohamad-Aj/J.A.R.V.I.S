@@ -176,6 +176,7 @@ class JarvisAssistant:
                 reminder_system.create_reminder_from_voice(
                     user_id=check_existing_user()
                 )
+                self.speak("Reminder Created Successfully")
 
     def start_listening(self):
         """Start the assistant in a loop."""

@@ -82,8 +82,40 @@ class ReminderSystem:
                 cursor.close()
                 conn.close()
 
+    def get_user_data(self, user_id):
+        try:
+            import os
+
+            db_url = os.getenv("DATABASE_URL")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT first_name,email, city, country FROM users WHERE id = %s",
+                (user_id,),
+            )
+            result = cur.fetchone()
+            cur.close()
+            conn.close()
+            if result:
+                first_name, email, city, country = result
+                return {
+                    "name": first_name,
+                    "email": email,
+                    "city": city,
+                    "country": country,
+                }
+            else:
+                return {}
+        except Exception as e:
+            print(f"Database error: {e}")
+            return {}
+
     def create_reminder_from_voice(self, user_id):
         recognizer = sr.Recognizer()
+        from google_calendar import add_event_to_calendar
+
+        # from main_window import get_user_data
+
         with sr.Microphone() as source:
             print("Listening for a reminder command...")
             recognizer.adjust_for_ambient_noise(source)
@@ -144,6 +176,9 @@ class ReminderSystem:
             # If datetime is still in the past (like today at 9am but it's already 10am)
             if dt < now:
                 dt += timedelta(days=1)  # Pus
+            user_data = self.get_user_data(user_id)
+            email = user_data.get("email")
+            add_event_to_calendar(email, title, f"Priority: {priority}", dt)
             self.create_reminder(user_id, title, priority, dt.isoformat())
 
         except Exception as e:

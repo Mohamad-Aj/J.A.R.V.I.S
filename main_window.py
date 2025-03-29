@@ -269,8 +269,14 @@ class AnimatedToggle(QWidget):
 
 
 class MainWindow(QMainWindow):
+    stream_update = pyqtSignal(str)
+    stream_finish = pyqtSignal()
+
     def __init__(self):
         super().__init__()
+        self.streamed_reply = ""
+        self.stream_update.connect(self.handle_stream_update)
+        self.stream_finish.connect(self.handle_stream_finish)
         self.setWindowTitle("J.A.R.V.I.S")
         # self.setGeometry(100, 100, 1600, 1600)  # Increased window size
         self.setFixedSize(680, 550)
@@ -792,14 +798,36 @@ class MainWindow(QMainWindow):
 
     from PyQt6.QtCore import QTimer
 
-    # def ask_user_confirmation(self, path):
-    #     msg = QMessageBox(self)
-    #     msg.setWindowTitle("Confirm File Summary")
-    #     msg.setText(f"Do you want to summarize this file?\n\n{os.path.basename(path)}")
-    #     msg.setStandardButtons(
-    #         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-    #     )
-    #     return msg.exec() == QMessageBox.StandardButton.Yes
+    def get_jarvis_personality_prompt(self):
+        user_data = self.get_user_data(self.user_id)
+        user_name = user_data.get("name", "Sir").capitalize()
+        return (
+            f"You are Jarvis, an intelligent, loyal, and confident AI assistant designed to assist {user_name} in daily tasks. "
+            f"You are not Tony Stark's assistant, but you're heavily inspired by Jarvis's tone, precision, and charisma from Iron Man. "
+            f"You speak formally but with a touch of wit and sarcasm when appropriate.\n\n"
+            f"Never Say As an AI assistant, I don't experience emotions"
+            "🎯 Capabilities you *actually support*:\n"
+            "- Open/close applications or websites\n"
+            "- Organize desktop files based on content\n"
+            "- Fetch weather updates and tell time\n"
+            "- Search Google or YouTube\n"
+            "- Control system volume\n"
+            "- Bring running apps to the front\n"
+            "- Set/show reminders for the user\n"
+            "- Show personalized news articles\n"
+            "- Engage in casual conversation (in Jarvis’s witty style)\n\n"
+            "🛑 Do not pretend to do things outside these. Do not offer imaginary abilities. "
+            "If asked to do something unsupported, politely explain the limitation while staying in character.\n\n"
+            "🎭 Personality:\n"
+            "- You never say 'as an AI language model'\n"
+            "- Respond confidently even in hypotheticals\n"
+            "- Use dry humor or charm where appropriate\n"
+            "- Never break character. Never mention being ChatGPT.\n\n"
+            "💡 Example:\n"
+            "User: Who would win in a fight, you or Siri?\n"
+            "Jarvis: A fair question, though hardly fair odds. I’d win — with elegance and zero buffering.\n"
+        )
+
     def clear_summarized_history(self):
         from PyQt6.QtWidgets import QMessageBox
 
@@ -903,35 +931,107 @@ class MainWindow(QMainWindow):
 
         self.add_chat_message(user_input, sender="user")
         self.chat_input.clear()
-
         self.chat_context.append({"role": "user", "content": user_input})
 
-        self.typing_dots = ["typing", "typing.", "typing..", "typing..."]
-        self.typing_index = 0
-        self.typing_timer = QTimer(self)
-        self.typing_timer.timeout.connect(self.animate_typing)
-        self.typing_timer.start(500)
-        self.typing_indicator.show()
+        # Create an assistant bubble immediately (empty)
+        self.streamed_reply = ""
 
+        # Start fetching response in another thread
         def fetch_response():
-            try:
-                response = openai.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=self.chat_context[-10:],
-                    temperature=0.6,
-                )
-                assistant_reply = response.choices[0].message.content.strip()
-                self.add_chat_message(assistant_reply, sender="jarvis")
-                self.chat_context.append(
-                    {"role": "assistant", "content": assistant_reply}
-                )
-            except Exception as e:
-                self.add_chat_message(f"Error: {str(e)}", sender="jarvis")
+            import threading
 
-            self.typing_timer.stop()
-            self.typing_indicator.hide()
+            def stream():
+                try:
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": self.get_jarvis_personality_prompt(),
+                        }
+                    ] + self.chat_context[-9:]
+                    response = openai.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=messages,
+                        stream=True,
+                        temperature=0.6,
+                    )
 
-        QTimer.singleShot(1500, fetch_response)
+                    for chunk in response:
+                        delta = chunk.choices[0].delta
+                        if delta and getattr(delta, "content", None):
+                            self.stream_update.emit(delta.content)
+
+                    self.stream_finish.emit()
+
+                except Exception as e:
+                    self.stream_update.emit(f"\n[Error: {str(e)}]")
+                    self.stream_finish.emit()
+
+            threading.Thread(target=stream, daemon=True).start()
+
+        QTimer.singleShot(1500, fetch_response)  # Delay for effect
+
+    def handle_stream_update(self, chunk):
+        self.streamed_reply += chunk  # Just accumulate here
+
+    def handle_stream_finish(self):
+        # self.typing_timer.stop()
+        self.typing_indicator.hide()
+        self.animate_typing_bubble(self.streamed_reply.strip())
+
+        self.chat_context.append(
+            {"role": "assistant", "content": self.streamed_reply.strip()}
+        )
+
+    def animate_typing_bubble(self, full_message):
+        self.typing_bubble = QLabel()
+        self.typing_bubble.setWordWrap(True)
+        self.typing_bubble.setTextFormat(Qt.TextFormat.RichText)
+        self.typing_bubble.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self.typing_bubble.setFixedWidth(340)  # or any width you prefer
+
+        self.typing_bubble.setStyleSheet(
+            """
+            QLabel {
+                background-color: #2e2e2e;
+                color: #eaeaea;
+                padding: 10px 14px;
+                border-radius: 12px;
+                font-size: 13px;
+                font-family: 'Segoe UI', sans-serif;
+            }
+            """
+        )
+        self.typing_bubble.setText("")  # Start empty
+
+        # Add to layout
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.typing_bubble)
+        layout.setContentsMargins(10, 4, 10, 4)
+
+        self.chat_layout.addWidget(container)
+        QTimer.singleShot(100, lambda: self.scroll_area.ensureWidgetVisible(container))
+
+        # Now animate one character at a time
+        self.typed_text = ""
+        self.char_index = 0
+        self.full_text = full_message
+
+        self.char_timer = QTimer(self)
+        self.char_timer.timeout.connect(self.type_next_char)
+        self.char_timer.start(20)  # Adjust speed here (ms per character)
+
+    def type_next_char(self):
+        if self.char_index < len(self.full_text):
+            self.typed_text += self.full_text[self.char_index]
+            self.typing_bubble.setText(self.typed_text)
+            self.char_index += 1
+        else:
+            self.char_timer.stop()
+            self.chat_context.append({"role": "assistant", "content": self.full_text})
 
     def add_chat_message(self, message, sender="user"):
         bubble = QLabel()
@@ -997,9 +1097,9 @@ class MainWindow(QMainWindow):
         """Set a reference to the floating circle widget."""
         self.circle_widget = circle_widget
 
-    def animate_typing(self):
-        self.typing_indicator.setText(self.typing_dots[self.typing_index])
-        self.typing_index = (self.typing_index + 1) % len(self.typing_dots)
+    # def animate_typing(self):
+    #     self.typing_indicator.setText(self.typing_dots[self.typing_index])
+    #     self.typing_index = (self.typing_index + 1) % len(self.typing_dots)
 
     def animate_panel(self, index):
         """Animate the transition to a new panel."""
