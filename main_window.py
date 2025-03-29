@@ -88,7 +88,7 @@ class SummarizeFileWorker(QThread):
         try:
             prompt = f"""
             You are provided with the content of a file: {self.file_content}.
-            Your task is to suggest a meaningful and concise summary for the file based on its primary topic and context.
+            Your task is to suggest a meaningful and detailed summary for the file based on its primary topic and context.
 
             If the content is in English:
             - The summary must be in English and properly written.
@@ -101,7 +101,7 @@ class SummarizeFileWorker(QThread):
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=500,
+                # max_tokens=500,
                 temperature=0.4,
             )
             summary = response.choices[0].message.content.strip()
@@ -412,6 +412,71 @@ class MainWindow(QMainWindow):
 
         # Connect the button to the ContextBasedAutomation's organize_desktop function
         organize_button.clicked.connect(self.run_organize_desktop)
+        # --- Add Chat Bot Utility Buttons to Automation Panel with full styling ---
+        # Create a reusable style (same as organize_button)
+        button_style = """
+            QPushButton {
+                background-color: #ffffff;
+                color: black;
+                padding: 10px 20px;
+                border-radius: 5px;
+                border: none;
+                font-size: 14px;
+                text-transform: none;
+            }
+            QPushButton:hover {
+                background-color: #F0F0F0;
+            }
+            QPushButton:pressed {
+                background-color: #E0E0E0;
+            }
+        """
+
+        # Rename File button with hover icon
+        rename_button = QPushButton("Rename File")
+        rename_button.setStyleSheet(button_style)
+        rename_button.setFixedSize(160, 40)
+        rename_button.clicked.connect(self.rename_file)
+        rename_info = HoverLabel(
+            "Rename File",
+            "Suggest a meaningful name for your file using AI based on its content.",
+        )
+        rename_info.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+        rename_layout = QHBoxLayout()
+        rename_layout.addWidget(rename_button)
+        rename_layout.addWidget(rename_info)
+        automation_layout.addLayout(rename_layout)
+
+        # Summarize File button
+        summarize_button = QPushButton("Summarize File")
+        summarize_button.setStyleSheet(button_style)
+        summarize_button.setFixedSize(160, 40)
+        summarize_button.clicked.connect(self.summarize_file)
+        summarize_info = HoverLabel(
+            "Summarize File", "Get a smart summary of any document in seconds."
+        )
+        summarize_info.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+        summarize_layout = QHBoxLayout()
+        summarize_layout.addWidget(summarize_button)
+        summarize_layout.addWidget(summarize_info)
+        automation_layout.addLayout(summarize_layout)
+
+        # Apps List button
+        apps_button = QPushButton("Apps List")
+        apps_button.setStyleSheet(button_style)
+        apps_button.setFixedSize(160, 40)
+        apps_button.clicked.connect(self.list_apps)
+        apps_info = HoverLabel(
+            "Apps List", "See a list of currently running apps and manage them."
+        )
+        apps_info.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+        apps_layout = QHBoxLayout()
+        apps_layout.addWidget(apps_button)
+        apps_layout.addWidget(apps_info)
+        automation_layout.addLayout(apps_layout)
 
         # Replace the QLabel automation panel with the new QWidget
         self.panel_stack.insertWidget(
@@ -491,81 +556,81 @@ class MainWindow(QMainWindow):
 
         chat_layout.addLayout(input_layout, stretch=1)
 
-        button_panel_layout = QHBoxLayout()
-        button_panel_layout.setContentsMargins(0, 5, 0, 0)
-        button_panel_layout.setAlignment(
-            Qt.AlignmentFlag.AlignRight
-        )  # Align buttons to the right
+        # button_panel_layout = QHBoxLayout()
+        # button_panel_layout.setContentsMargins(0, 5, 0, 0)
+        # button_panel_layout.setAlignment(
+        #     Qt.AlignmentFlag.AlignRight
+        # )  # Align buttons to the right
 
-        # Rename File Button
-        self.rename_file_button = QPushButton("Rename File")
-        self.rename_file_button.setStyleSheet(
-            """
-             QPushButton {
-                background-color: white;
-                color: black;
-                padding: 10px;
-                border-radius: 8px;
-                font-size: 12px;
-                border: 2px solid black; 
-                text-transform: none;                              
-            }
-            QPushButton:hover {
-                background-color: #F0F0F0;
-            }
-        """
-        )
-        self.rename_file_button.setFixedSize(120, 40)
-        self.rename_file_button.clicked.connect(self.rename_file)
-        button_panel_layout.addWidget(self.rename_file_button)
-        # chat_layout.addWidget(self.rename_file_button, alignment=Qt.AlignmentFlag.AlignRight)
+        # # Rename File Button
+        # self.rename_file_button = QPushButton("Rename File")
+        # self.rename_file_button.setStyleSheet(
+        #     """
+        #      QPushButton {
+        #         background-color: white;
+        #         color: black;
+        #         padding: 10px;
+        #         border-radius: 8px;
+        #         font-size: 12px;
+        #         border: 2px solid black;
+        #         text-transform: none;
+        #     }
+        #     QPushButton:hover {
+        #         background-color: #F0F0F0;
+        #     }
+        # """
+        # )
+        # self.rename_file_button.setFixedSize(120, 40)
+        # self.rename_file_button.clicked.connect(self.rename_file)
+        # button_panel_layout.addWidget(self.rename_file_button)
+        # # chat_layout.addWidget(self.rename_file_button, alignment=Qt.AlignmentFlag.AlignRight)
 
-        # Summarize File Button
-        self.summarize_file_button = QPushButton("Summarize File")
-        self.summarize_file_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: white;
-                color: black;
-                padding: 10px;
-                border-radius: 8px;
-                font-size: 12px;
-                border: 2px solid black; 
-                text-transform: none;                                
-            }
-            QPushButton:hover {
-                background-color: #F0F0F0;
-            }
-        """
-        )
-        self.summarize_file_button.setFixedSize(120, 40)
-        self.summarize_file_button.clicked.connect(self.summarize_file)
-        # chat_layout.addWidget(self.summarize_file_button, alignment=Qt.AlignmentFlag.AlignRight)
-        button_panel_layout.addWidget(self.summarize_file_button)
+        # # Summarize File Button
+        # self.summarize_file_button = QPushButton("Summarize File")
+        # self.summarize_file_button.setStyleSheet(
+        #     """
+        #     QPushButton {
+        #         background-color: white;
+        #         color: black;
+        #         padding: 10px;
+        #         border-radius: 8px;
+        #         font-size: 12px;
+        #         border: 2px solid black;
+        #         text-transform: none;
+        #     }
+        #     QPushButton:hover {
+        #         background-color: #F0F0F0;
+        #     }
+        # """
+        # )
+        # self.summarize_file_button.setFixedSize(120, 40)
+        # self.summarize_file_button.clicked.connect(self.summarize_file)
+        # # chat_layout.addWidget(self.summarize_file_button, alignment=Qt.AlignmentFlag.AlignRight)
+        # button_panel_layout.addWidget(self.summarize_file_button)
 
-        # List Apps Button
-        self.list_apps_button = QPushButton("Apps List")
-        self.list_apps_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: white;
-                color: black;
-                padding: 10px;
-                border-radius: 8px;
-                font-size: 12px;
-                border: 2px solid black; 
-                text-transform: none;                                 
-            }
-            QPushButton:hover {
-                background-color: #F0F0F0;
-            }
-        """
-        )
-        self.list_apps_button.setFixedSize(120, 40)
-        self.list_apps_button.clicked.connect(self.list_apps)
-        button_panel_layout.addWidget(self.list_apps_button)
+        # # List Apps Button
+        # self.list_apps_button = QPushButton("Apps List")
+        # self.list_apps_button.setStyleSheet(
+        #     """
+        #     QPushButton {
+        #         background-color: white;
+        #         color: black;
+        #         padding: 10px;
+        #         border-radius: 8px;
+        #         font-size: 12px;
+        #         border: 2px solid black;
+        #         text-transform: none;
+        #     }
+        #     QPushButton:hover {
+        #         background-color: #F0F0F0;
+        #     }
+        # """
+        # )
+        # self.list_apps_button.setFixedSize(120, 40)
+        # self.list_apps_button.clicked.connect(self.list_apps)
+        # button_panel_layout.addWidget(self.list_apps_button)
 
-        chat_layout.addLayout(button_panel_layout, stretch=1)
+        # chat_layout.addLayout(button_panel_layout, stretch=1)
 
         self.panel_stack.addWidget(self.chat_bot_panel)
 
@@ -1211,8 +1276,9 @@ class MainWindow(QMainWindow):
             # Create and start the worker thread
             self.worker = SummarizeFileWorker(file_path, file_content, self)
             self.worker.finished.connect(
-                lambda summary: self.on_summary_finished(
-                    summary, file_path, progress_dialog
+                lambda summary: (
+                    progress_dialog.close(),
+                    self.show_summary_panel(file_path, summary),
                 )
             )
             self.worker.error.connect(
