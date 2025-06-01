@@ -9,15 +9,20 @@ from dotenv import load_dotenv
 import os
 from tkinter import Text
 from db_insertion import insert_user_data
+import jwt
 
 
 LOCAL_STORAGE_FILE = "user_config.json"
 load_dotenv()
 
+
 class RegistrationWizard(ctk.CTk):
     def __init__(self, on_registration_complete=None):
         super().__init__()
 
+        self.jwt_secret = os.getenv("JWT_SECRET")
+        if not self.jwt_secret:
+            raise ValueError("JWT_SECRET not found. Please set it in your .env file.")
         # Window setup
         self.title("Jarvis Registration Wizard")
         self.geometry("800x600")  # Slightly smaller fixed size window
@@ -27,11 +32,12 @@ class RegistrationWizard(ctk.CTk):
         self.current_question_index = 0
         self.flag = 0
 
-
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         if not self.openai_api_key:
-            raise ValueError("OpenAI API key not found. Please set it in your .env file.")
-        
+            raise ValueError(
+                "OpenAI API key not found. Please set it in your .env file."
+            )
+
         self.conversation = [
             {
                 "role": "system",
@@ -55,28 +61,36 @@ class RegistrationWizard(ctk.CTk):
             "Zip Code": ctk.StringVar(),
             "Country": ctk.StringVar(),
             "Date of Birth": ctk.StringVar(),
-            "Gender": ctk.StringVar(),
+            # "Gender": ctk.StringVar(),
             "Hobbies": [],
             "Interests": [],
             "Preferred Topics": [],
-            "Daily Updates": ctk.StringVar(),
-            "Accessibility": ctk.StringVar(),
         }
 
         # Predefined options for cards
         self.hobbies_options = ["Sports", "Art", "Music", "Reading", "Gaming"]
-        self.preferences_options = ["Technology", "Health", "Travel", "Education", "Food"]
+        self.preferences_options = [
+            "Technology",
+            "Health",
+            "Travel",
+            "Education",
+            "Food",
+        ]
 
         # Create a sidebar for the steps
-        self.sidebar = ctk.CTkFrame(self, fg_color="#2d3142", width=150, corner_radius=10)
+        self.sidebar = ctk.CTkFrame(
+            self, fg_color="#2d3142", width=150, corner_radius=10
+        )
         self.sidebar.pack(side="left", fill="y", padx=(5, 0), pady=5)
 
-
         # Step titles
-        self.steps_titles = ["Personal Info", "Preferences", "Setup Options","Agreement"]
+        self.steps_titles = [
+            "Personal Info",
+            "Preferences",
+            "Setup Options",
+            "Agreement",
+        ]
         self.current_step = None
-        
-
 
         # Create step indicators in the sidebar
         self.step_labels = []
@@ -90,7 +104,6 @@ class RegistrationWizard(ctk.CTk):
             )
             step_label.pack(fill="x", pady=10, padx=10)
             self.step_labels.append(step_label)
-
 
         # Create frames for the steps
         self.steps = [
@@ -109,7 +122,10 @@ class RegistrationWizard(ctk.CTk):
 
         # Title
         ctk.CTkLabel(
-            frame, text="Personal Information", font=ctk.CTkFont(size=16, weight="bold"), text_color="#2d3142"
+            frame,
+            text="Personal Information",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#2d3142",
         ).pack(pady=10)
 
         # Single column layout for inputs
@@ -124,6 +140,7 @@ class RegistrationWizard(ctk.CTk):
             ("Phone", "entry", "Enter your phone number"),
             ("Date of Birth", "custom_date", None),
             ("Street Name", "entry", "Enter your street name"),
+            ("State", "entry", "Enter your state"),
             ("House/Apartment", "entry", "Enter house/apartment details"),
             ("City", "entry", "Enter your city"),
             ("Zip Code", "entry", "Enter your zip code"),
@@ -131,7 +148,14 @@ class RegistrationWizard(ctk.CTk):
         ]
 
         for i, (label, widget, placeholder) in enumerate(inputs):
-            self.create_input(input_grid, label, row=i, column=0, widget=widget, placeholder=placeholder)
+            self.create_input(
+                input_grid,
+                label,
+                row=i,
+                column=0,
+                widget=widget,
+                placeholder=placeholder,
+            )
 
         # Navigation buttons in a separate container
         nav_frame = ctk.CTkFrame(frame, fg_color="transparent")
@@ -145,22 +169,28 @@ class RegistrationWizard(ctk.CTk):
         next_button.pack(side="top", padx=(5, 0))
         return frame
 
-
     def create_step2(self):
         """Step 2: Preferences."""
         frame = self.create_step_frame()
 
         # Title
         ctk.CTkLabel(
-            frame, text="Preferences", font=ctk.CTkFont(size=16, weight="bold"), text_color="#2d3142"
+            frame,
+            text="Preferences",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#2d3142",
         ).pack(pady=10)
 
         # Scrollable frame
         scrollable_frame = ctk.CTkFrame(frame, fg_color="transparent")
         scrollable_frame.pack(fill="both", expand=True, pady=5, padx=5)
 
-        canvas = ctk.CTkCanvas(scrollable_frame, bg="white", highlightthickness=0, height=800)
-        scrollbar = ttk.Scrollbar(scrollable_frame, orient="vertical", command=canvas.yview)
+        canvas = ctk.CTkCanvas(
+            scrollable_frame, bg="white", highlightthickness=0, height=800
+        )
+        scrollbar = ttk.Scrollbar(
+            scrollable_frame, orient="vertical", command=canvas.yview
+        )
         inner_frame = ctk.CTkFrame(canvas, fg_color="transparent")
 
         canvas.configure(yscrollcommand=scrollbar.set)
@@ -173,15 +203,26 @@ class RegistrationWizard(ctk.CTk):
         )
 
         # Hobbies section
-        self.create_card_selection(inner_frame, "Hobbies", self.hobbies_options, self.user_data["Hobbies"])
+        self.create_card_selection(
+            inner_frame, "Hobbies", self.hobbies_options, self.user_data["Hobbies"]
+        )
 
         # Interests section
-        self.create_card_selection(inner_frame, "Interests", self.preferences_options, self.user_data["Interests"])
+        self.create_card_selection(
+            inner_frame,
+            "Interests",
+            self.preferences_options,
+            self.user_data["Interests"],
+        )
 
         # Navigation buttons in a separate container
         nav_frame = ctk.CTkFrame(frame, fg_color="transparent")
         nav_frame.pack(fill="x", pady=5)
-        self.add_navigation_buttons(nav_frame, back_command=lambda: self.show_step(0), next_command=lambda: self.show_step(2))
+        self.add_navigation_buttons(
+            nav_frame,
+            back_command=lambda: self.show_step(0),
+            next_command=lambda: self.show_step(2),
+        )
 
         return frame
 
@@ -191,7 +232,10 @@ class RegistrationWizard(ctk.CTk):
 
         # Title
         ctk.CTkLabel(
-            frame, text="Interactive Chat Setup", font=ctk.CTkFont(size=16, weight="bold"), text_color="#2d3142"
+            frame,
+            text="Interactive Chat Setup",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#2d3142",
         ).pack(pady=10)
 
         # Chat area
@@ -199,7 +243,9 @@ class RegistrationWizard(ctk.CTk):
         chat_frame.pack(fill="both", expand=True, padx=20, pady=10)
 
         # Chat history display
-        self.chat_history = ctk.CTkTextbox(chat_frame, width=400, height=300, wrap="word", state="disabled")
+        self.chat_history = ctk.CTkTextbox(
+            chat_frame, width=400, height=300, wrap="word", state="disabled"
+        )
         self.chat_history.pack(fill="both", expand=True, pady=10)
 
         # Input field for user message
@@ -207,7 +253,9 @@ class RegistrationWizard(ctk.CTk):
         input_frame.pack(fill="x", pady=5)
 
         self.user_input = ctk.StringVar()
-        ctk.CTkEntry(input_frame, textvariable=self.user_input, width=300).pack(side="left", padx=5)
+        ctk.CTkEntry(input_frame, textvariable=self.user_input, width=300).pack(
+            side="left", padx=5
+        )
 
         send_button = ctk.CTkButton(
             input_frame,
@@ -220,16 +268,19 @@ class RegistrationWizard(ctk.CTk):
         # Navigation button
         nav_frame = ctk.CTkFrame(frame, fg_color="transparent")
         nav_frame.pack(fill="x", pady=10)
-        self.add_navigation_buttons(nav_frame, back_command=lambda: self.show_step(1), next_command=lambda: self.show_step(3))
+        self.add_navigation_buttons(
+            nav_frame,
+            back_command=lambda: self.show_step(1),
+            next_command=lambda: self.show_step(3),
+        )
 
         # Collect latest preferences and reset conversation state
         self.collect_visible_cards()
         self.initialize_chatbot_state()
-        
+
         # self.start_chatbot()
 
         return frame
-
 
     def create_step4(self):
         """Step 4: Agreements to Terms and Conditions."""
@@ -237,10 +288,10 @@ class RegistrationWizard(ctk.CTk):
 
         # Title
         ctk.CTkLabel(
-            frame, 
-            text="Terms and Conditions", 
-            font=ctk.CTkFont(size=16, weight="bold"), 
-            text_color="#2d3142"
+            frame,
+            text="Terms and Conditions",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#2d3142",
         ).pack(pady=10)
 
         # Scrollable terms and conditions text
@@ -262,35 +313,34 @@ class RegistrationWizard(ctk.CTk):
 
         # Add agreement text
         agreement_text = (
-        "By proceeding, you agree to the following terms and conditions:\n\n"
-        "1. Data Collection: This application may access and collect data on your computer, "
-        "including personal files, system logs, browsing history, and user activity.\n\n"
-        "2. Activity Monitoring: When enabled, the application may monitor your activity for "
-        "purposes of providing personalized assistance or improving functionality. This includes "
-        "tracking active applications, analyzing usage patterns, and collecting contextual data.\n\n"
-        "3. Microphone Access: The application may use your microphone to process voice commands "
-        "and interactions. Audio data will only be processed in real-time and will not be stored unless explicitly stated.\n\n"
-        "4. Data Storage: Collected data may be stored locally or in secure cloud storage for analysis "
-        "and to enhance your experience. Data retention policies will comply with industry standards.\n\n"
-        "5. Privacy Assurance: We take your privacy seriously. Collected data will be used only for purposes "
-        "stated within this agreement and will not be shared with third parties without your consent.\n\n"
-        "6. System Access: By using this application, you agree to allow it to access system resources "
-        "necessary for its operation, including network access, file management, microphone, and process execution.\n\n"
-        "7. Internet Access: The application may require internet access to communicate with APIs, download updates, "
-        "or provide cloud-based services. Your data transmission will be secured.\n\n"
-        "8. Updates and Changes: This application may update its features and terms from time to time. "
-        "By continuing to use the application after an update, you agree to the new terms.\n\n"
-        "9. Termination: If you disagree with any of these terms, you must discontinue using the application immediately. "
-        "You may also contact support to request the deletion of any data collected.\n\n"
+            "By proceeding, you agree to the following terms and conditions:\n\n"
+            "1. Data Collection: This application may access and collect data on your computer, "
+            "including personal files, system logs, browsing history, and user activity.\n\n"
+            "2. Activity Monitoring: When enabled, the application may monitor your activity for "
+            "purposes of providing personalized assistance or improving functionality. This includes "
+            "tracking active applications, analyzing usage patterns, and collecting contextual data.\n\n"
+            "3. Microphone Access: The application may use your microphone to process voice commands "
+            "and interactions. Audio data will only be processed in real-time and will not be stored unless explicitly stated.\n\n"
+            "4. Data Storage: Collected data may be stored locally or in secure cloud storage for analysis "
+            "and to enhance your experience. Data retention policies will comply with industry standards.\n\n"
+            "5. Privacy Assurance: We take your privacy seriously. Collected data will be used only for purposes "
+            "stated within this agreement and will not be shared with third parties without your consent.\n\n"
+            "6. System Access: By using this application, you agree to allow it to access system resources "
+            "necessary for its operation, including network access, file management, microphone, and process execution.\n\n"
+            "7. Internet Access: The application may require internet access to communicate with APIs, download updates, "
+            "or provide cloud-based services. Your data transmission will be secured.\n\n"
+            "8. Updates and Changes: This application may update its features and terms from time to time. "
+            "By continuing to use the application after an update, you agree to the new terms.\n\n"
+            "9. Termination: If you disagree with any of these terms, you must discontinue using the application immediately. "
+            "You may also contact support to request the deletion of any data collected.\n\n"
         )
 
-
         ctk.CTkLabel(
-            content_frame, 
-            text=agreement_text, 
-            font=ctk.CTkFont(size=12), 
-            text_color="#2d3142", 
-            wraplength=400, 
+            content_frame,
+            text=agreement_text,
+            font=ctk.CTkFont(size=12),
+            text_color="#2d3142",
+            wraplength=400,
             justify="left",
             anchor="nw",
         ).pack(pady=10, padx=10)
@@ -298,24 +348,23 @@ class RegistrationWizard(ctk.CTk):
         # Checkbox for agreement
         self.agreed_to_terms = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            frame, 
+            frame,
             text_color="black",
-            text="I agree to the terms and conditions", 
-            variable=self.agreed_to_terms, 
-            font=ctk.CTkFont(size=12)
+            text="I agree to the terms and conditions",
+            variable=self.agreed_to_terms,
+            font=ctk.CTkFont(size=12),
         ).pack(pady=10)
 
         # Navigation buttons
         nav_frame = ctk.CTkFrame(frame, fg_color="transparent")
         nav_frame.pack(fill="x", pady=5)
         self.add_navigation_buttons(
-            nav_frame, 
-            back_command=lambda: self.show_step(2), 
-            finish_command=self.finish_registration
+            nav_frame,
+            back_command=lambda: self.show_step(2),
+            finish_command=self.finish_registration,
         )
 
         return frame
-
 
     def initialize_chatbot_state(self):
         """Initialize or reset chatbot state."""
@@ -332,13 +381,6 @@ class RegistrationWizard(ctk.CTk):
             }
         ]
 
-     
-
-
-
-
-
-
     def start_chatbot(self):
         """Start chatbot interaction dynamically with updated preferences."""
         # Collect visible cards to ensure the latest preferences are used
@@ -347,7 +389,7 @@ class RegistrationWizard(ctk.CTk):
         if not self.selected_preferences:
             self.update_chat_history(
                 "Jarvis",
-                "No preferences were found from the previous step. Please go back to Step 2 and select preferences."
+                "No preferences were found from the previous step. Please go back to Step 2 and select preferences.",
             )
             return
 
@@ -364,17 +406,15 @@ class RegistrationWizard(ctk.CTk):
         self.flag = 2
         self.ask_next_question(is_hobby=True)
 
-      
-
-
-
     def ask_next_question(self, is_hobby=True):
         """
-        Ask specific, relevant, and context-aware follow-up questions 
+        Ask specific, relevant, and context-aware follow-up questions
         for hobbies and interests.
         """
         topics = self.hobby_topics if is_hobby else self.interest_topics
-        current_index = self.current_hobby_index if is_hobby else self.current_interest_index
+        current_index = (
+            self.current_hobby_index if is_hobby else self.current_interest_index
+        )
 
         if current_index < len(topics):
             current_topic = topics[current_index]
@@ -396,7 +436,8 @@ class RegistrationWizard(ctk.CTk):
 
                     response = openai.chat.completions.create(
                         model="gpt-3.5-turbo",
-                        messages=self.conversation + [{"role": "user", "content": prompt}],
+                        messages=self.conversation
+                        + [{"role": "user", "content": prompt}],
                         max_tokens=50,  # Limit response length
                         temperature=0.5,  # Moderate randomness
                     )
@@ -409,9 +450,14 @@ class RegistrationWizard(ctk.CTk):
                     self.update_chat_history("Jarvis", question)
 
                     # Increment the question count for this topic
-                    self.questions_per_topic[current_topic] = self.questions_per_topic.get(current_topic, 0) + 1
+                    self.questions_per_topic[current_topic] = (
+                        self.questions_per_topic.get(current_topic, 0) + 1
+                    )
                 except Exception as e:
-                    self.update_chat_history("Jarvis", f"An error occurred while generating the question: {str(e)}")
+                    self.update_chat_history(
+                        "Jarvis",
+                        f"An error occurred while generating the question: {str(e)}",
+                    )
             else:
                 # Move to the next topic if this one is done
                 if is_hobby:
@@ -427,9 +473,10 @@ class RegistrationWizard(ctk.CTk):
         else:
             # If all topics are done
             self.flag = 1
-            self.update_chat_history("Jarvis", "Thank you for the information! The interaction is now complete.")
-
-
+            self.update_chat_history(
+                "Jarvis",
+                "Thank you for the information! The interaction is now complete.",
+            )
 
     def process_user_response(self):
         """Process user's response to the chatbot."""
@@ -457,14 +504,13 @@ class RegistrationWizard(ctk.CTk):
         # Save response with tag
         if f"Responses for {category}" not in self.user_data:
             self.user_data[f"Responses for {category}"] = []
-        self.user_data[f"Responses for {category}"].append({"Tag": tag, "Answer": response})
+        self.user_data[f"Responses for {category}"].append(
+            {"Tag": tag, "Answer": response}
+        )
 
         # Ask the next question
         is_hobby = category == "Hobbies"
         self.ask_next_question(is_hobby=is_hobby)
-
-
-
 
     def update_chat_history(self, sender, message):
         """Update the chat history in the UI."""
@@ -474,7 +520,7 @@ class RegistrationWizard(ctk.CTk):
         if sender == "User":
             fg_color = "#ffffff"  # White background for user messages
             align = "right"
-            
+
         else:
             fg_color = "#f0f0f0"  # Light gray background for bot messages
             align = "left"
@@ -497,7 +543,6 @@ class RegistrationWizard(ctk.CTk):
         self.chat_history.configure(state="disabled")
         self.chat_history.see("end")
 
-
     def collect_visible_cards(self):
         """Collect all visible cards in Step 2 as selected preferences."""
         # Reset the selected lists before collecting new data
@@ -509,7 +554,9 @@ class RegistrationWizard(ctk.CTk):
         for row in self.hobbies_frame.winfo_children():  # Access hobbies cards
             for card in row.winfo_children():
                 for widget in card.winfo_children():
-                    if isinstance(widget, ctk.CTkLabel):  # Look for labels containing card text
+                    if isinstance(
+                        widget, ctk.CTkLabel
+                    ):  # Look for labels containing card text
                         hobby = widget.cget("text")
                         if hobby not in self.user_data["Hobbies"]:
                             self.user_data["Hobbies"].append(hobby)
@@ -518,57 +565,93 @@ class RegistrationWizard(ctk.CTk):
         for row in self.interests_frame.winfo_children():  # Access interests cards
             for card in row.winfo_children():
                 for widget in card.winfo_children():
-                    if isinstance(widget, ctk.CTkLabel):  # Look for labels containing card text
+                    if isinstance(
+                        widget, ctk.CTkLabel
+                    ):  # Look for labels containing card text
                         interest = widget.cget("text")
                         if interest not in self.user_data["Interests"]:
                             self.user_data["Interests"].append(interest)
 
         # Combine hobbies and interests into selected_preferences
-        self.selected_preferences = self.user_data["Hobbies"] + self.user_data["Interests"]
+        self.selected_preferences = (
+            self.user_data["Hobbies"] + self.user_data["Interests"]
+        )
 
         # Reset chatbot state dynamically
         self.initialize_chatbot_state()
-
-        
-
-
-
-        
 
     def create_step_frame(self):
         """Helper method to create a step frame."""
         frame = ctk.CTkFrame(self, fg_color="#ffffff", corner_radius=10)
         return frame
 
-    def create_input(self, parent, label, row, column, widget="entry", values=None, placeholder=None):
+    def create_input(
+        self, parent, label, row, column, widget="entry", values=None, placeholder=None
+    ):
         """Create an input field with a label in a grid layout."""
         input_frame = ctk.CTkFrame(parent, fg_color="transparent")
         input_frame.grid(row=row, column=column, padx=10, pady=5, sticky="w")
 
         ctk.CTkLabel(
-            input_frame, text=label, font=ctk.CTkFont(size=12), text_color="#2d3142", width=150, anchor="w"
+            input_frame,
+            text=label,
+            font=ctk.CTkFont(size=12),
+            text_color="#2d3142",
+            width=150,
+            anchor="w",
         ).pack(side="left", padx=5)
 
         if widget == "entry":
-            entry = ctk.CTkEntry(input_frame, textvariable=self.user_data[label], width=200, fg_color="#2d3142")
+            entry = ctk.CTkEntry(
+                input_frame,
+                textvariable=self.user_data[label],
+                width=200,
+                fg_color="#2d3142",
+            )
             if placeholder:
                 entry.insert(0, placeholder)
                 entry.configure(text_color="lightgray")
-                entry.bind("<FocusIn>", lambda e: entry.delete(0, "end") if entry.get() == placeholder else None)
-                entry.bind("<FocusOut>", lambda e: entry.insert(0, placeholder) if entry.get() == "" else None)
+                entry.bind(
+                    "<FocusIn>",
+                    lambda e: (
+                        entry.delete(0, "end") if entry.get() == placeholder else None
+                    ),
+                )
+                entry.bind(
+                    "<FocusOut>",
+                    lambda e: (
+                        entry.insert(0, placeholder) if entry.get() == "" else None
+                    ),
+                )
             entry.pack(side="left", padx=10)
         elif widget == "dropdown":
-            ctk.CTkOptionMenu(input_frame, variable=self.user_data[label], values=values, corner_radius=12).pack(side="left", padx=10)
+            ctk.CTkOptionMenu(
+                input_frame,
+                variable=self.user_data[label],
+                values=values,
+                corner_radius=12,
+            ).pack(side="left", padx=10)
         elif widget == "custom_date":
             self.create_custom_datepicker(input_frame, label)
-
-
 
     def create_custom_datepicker(self, parent, label):
         """Create a custom date picker using scrollable dropdown menus."""
         current_year = datetime.date.today().year
         years = [str(year) for year in range(current_year - 100, current_year + 1)]
-        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        months = [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ]
         days = [str(day) for day in range(1, 32)]
 
         # Variables to store selected values
@@ -588,17 +671,22 @@ class RegistrationWizard(ctk.CTk):
                 # fg_color="#ffffff",
                 text_color="#000000",
                 fg_color="lightgray",
-                width=width*5.8,
+                width=width * 5.8,
                 height=30,
-                
                 command=lambda: toggle_menu(),
             )
             display_button.pack()
 
             # Scrollable options menu
-            menu_frame = ctk.CTkFrame(dropdown_frame, fg_color="#ffffff", corner_radius=5, width=width)
-            canvas = ctk.CTkCanvas(menu_frame, height=250, bg="#ffffff", highlightthickness=0, width=width)
-            scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=canvas.yview)
+            menu_frame = ctk.CTkFrame(
+                dropdown_frame, fg_color="#ffffff", corner_radius=5, width=width
+            )
+            canvas = ctk.CTkCanvas(
+                menu_frame, height=250, bg="#ffffff", highlightthickness=0, width=width
+            )
+            scrollbar = ttk.Scrollbar(
+                menu_frame, orient="vertical", command=canvas.yview
+            )
             options_frame = ctk.CTkFrame(canvas, fg_color="#ffffff")
 
             canvas.create_window((0, 0), window=options_frame, anchor="nw")
@@ -617,7 +705,10 @@ class RegistrationWizard(ctk.CTk):
                     command=lambda opt=option: select_option(opt),
                 ).pack(fill="x")
 
-            options_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            options_frame.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+            )
             canvas.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
             menu_frame.pack_forget()  # Hide initially
@@ -642,10 +733,18 @@ class RegistrationWizard(ctk.CTk):
         # Update the final date in the user data
         def update_date():
             selected_day = day_var.get()
-            selected_month = months.index(month_var.get()) + 1 if month_var.get() in months else 0
+            selected_month = (
+                months.index(month_var.get()) + 1 if month_var.get() in months else 0
+            )
             selected_year = year_var.get()
-            if selected_day != "Day" and selected_month != 0 and selected_year != "Year":
-                date_str = f"{selected_year}-{selected_month:02d}-{int(selected_day):02d}"
+            if (
+                selected_day != "Day"
+                and selected_month != 0
+                and selected_year != "Year"
+            ):
+                date_str = (
+                    f"{selected_year}-{selected_month:02d}-{int(selected_day):02d}"
+                )
                 self.user_data[label].set(date_str)
 
         # Bind updates
@@ -653,14 +752,16 @@ class RegistrationWizard(ctk.CTk):
         month_var.trace("w", lambda *args: update_date())
         year_var.trace("w", lambda *args: update_date())
 
-
     def create_card_selection(self, parent, title, options, selected_list):
         """Create a card selection area for multiple choices."""
         section_frame = ctk.CTkFrame(parent, fg_color="transparent")
         section_frame.pack(pady=10, padx=10, fill="x")
 
         ctk.CTkLabel(
-            section_frame, text=title, font=ctk.CTkFont(size=14, weight="bold"), text_color="#2d3142"
+            section_frame,
+            text=title,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#2d3142",
         ).pack(anchor="w", pady=5)
 
         # Assign to the correct frame
@@ -689,14 +790,15 @@ class RegistrationWizard(ctk.CTk):
         # Link the correct custom_entry to the Add button
         entry_var = self.hobbies_entry if title == "Hobbies" else self.interests_entry
 
-        ctk.CTkEntry(add_frame, textvariable=entry_var, placeholder_text="Add your own...").pack(side="left", padx=5)
+        ctk.CTkEntry(
+            add_frame, textvariable=entry_var, placeholder_text="Add your own..."
+        ).pack(side="left", padx=5)
         ctk.CTkButton(
             add_frame,
             text="Add",
             command=lambda: self.add_custom_option(entry_var.get(), selected_list),
         ).pack(side="left", padx=5)
 
-    
     def create_card(self, parent, option, selected_list):
         """Create an individual card with a delete button."""
         card_frame = ctk.CTkFrame(parent, fg_color="#e0e0e0", corner_radius=8)
@@ -732,7 +834,11 @@ class RegistrationWizard(ctk.CTk):
     def rearrange_cards(self, selected_list):
         """Rearrange the cards dynamically after deletion."""
         # Determine the parent frame
-        parent_frame = self.hobbies_frame if selected_list == self.user_data["Hobbies"] else self.interests_frame
+        parent_frame = (
+            self.hobbies_frame
+            if selected_list == self.user_data["Hobbies"]
+            else self.interests_frame
+        )
 
         # Clear the existing rows
         for row in parent_frame.winfo_children():
@@ -744,7 +850,6 @@ class RegistrationWizard(ctk.CTk):
                 row_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
                 row_frame.pack(fill="x", pady=5)
             self.create_card(row_frame, option, selected_list)
-
 
     def add_custom_option(self, option, selected_list):
         """Add a custom option to the selected list."""
@@ -762,11 +867,19 @@ class RegistrationWizard(ctk.CTk):
         selected_list.append(option)
 
         # Find the last row frame in the corresponding frame
-        parent_frame = self.hobbies_frame if selected_list == self.user_data["Hobbies"] else self.interests_frame
-        last_row = parent_frame.winfo_children()[-1] if parent_frame.winfo_children() else None
+        parent_frame = (
+            self.hobbies_frame
+            if selected_list == self.user_data["Hobbies"]
+            else self.interests_frame
+        )
+        last_row = (
+            parent_frame.winfo_children()[-1] if parent_frame.winfo_children() else None
+        )
 
         # Check if the last row has space for more cards
-        if last_row and len(last_row.winfo_children()) < 4:  # Assuming max 4 cards per row
+        if (
+            last_row and len(last_row.winfo_children()) < 4
+        ):  # Assuming max 4 cards per row
             self.create_card(last_row, option, selected_list)
         else:
             # Create a new row if the last row is full or doesn't exist
@@ -780,20 +893,27 @@ class RegistrationWizard(ctk.CTk):
         elif selected_list == self.user_data["Interests"]:
             self.interests_entry.set("")
 
-
-    def add_navigation_buttons(self, parent, back_command=None, next_command=None, finish_command=None):
+    def add_navigation_buttons(
+        self, parent, back_command=None, next_command=None, finish_command=None
+    ):
         """Add Back, Next, and Finish buttons centered at the bottom."""
         button_frame = ctk.CTkFrame(parent, fg_color="transparent")
         button_frame.pack(pady=20, fill="x")
 
         if back_command:
-            ctk.CTkButton(button_frame, text="Back", command=back_command, fg_color="#2d3142").pack(side="left", padx=5)
+            ctk.CTkButton(
+                button_frame, text="Back", command=back_command, fg_color="#2d3142"
+            ).pack(side="left", padx=5)
         if next_command:
             # Adjust margin for the "Next" button specifically for step 1
             padx_value = 5 if next_command.__code__.co_consts[0] == 1 else 5
-            ctk.CTkButton(button_frame, text="Next", command=next_command, fg_color="#2d3142").pack(side="right", padx=padx_value)
+            ctk.CTkButton(
+                button_frame, text="Next", command=next_command, fg_color="#2d3142"
+            ).pack(side="right", padx=padx_value)
         if finish_command:
-            ctk.CTkButton(button_frame, text="Finish", command=finish_command, fg_color="#2d3142").pack(side="right", padx=5)
+            ctk.CTkButton(
+                button_frame, text="Finish", command=finish_command, fg_color="#2d3142"
+            ).pack(side="right", padx=5)
 
         # Center align buttons
         button_frame.pack_propagate(False)
@@ -822,7 +942,9 @@ class RegistrationWizard(ctk.CTk):
                 self.geometry("650x500")  # Set size for step 4
 
             # Show the selected step
-            self.steps[index].pack(side="right", fill="both", expand=True, padx=5, pady=5)
+            self.steps[index].pack(
+                side="right", fill="both", expand=True, padx=5, pady=5
+            )
 
             # Update the sidebar indicators
             for i, step_label in enumerate(self.step_labels):
@@ -830,28 +952,29 @@ class RegistrationWizard(ctk.CTk):
 
             self.current_step = index
 
-
-
     def finish_registration(self):
         """Handle form completion."""
         required_fields = ["First Name", "Email"]
-        for field in required_fields:
-            if not self.user_data[field].get():
+        for field, var in self.user_data.items():
+            if isinstance(var, ctk.StringVar) and not var.get().strip():
                 messagebox.showerror("Error", f"{field} is required!")
                 return
 
         # Check if the user agreed to the terms
         if not self.agreed_to_terms.get():
-            messagebox.showerror("Error", "You must agree to the terms and conditions to proceed.")
+            messagebox.showerror(
+                "Error", "You must agree to the terms and conditions to proceed."
+            )
             return
 
         # Collect visible cards to update hobbies and interests
         self.collect_visible_cards()
 
-
         for category in ["Responses for Hobbies", "Responses for Interests"]:
             if category not in self.user_data:
-                self.user_data[category] = []  # Initialize as an empty list if no responses are collected
+                self.user_data[category] = (
+                    []
+                )  # Initialize as an empty list if no responses are collected
 
         # Prepare the data for JSON serialization
         serializable_data = {
@@ -861,28 +984,47 @@ class RegistrationWizard(ctk.CTk):
         serializable_data["registered"] = True  # Set the registered flag
 
         # Save data in the database
-        try:
-            user_id = insert_user_data(serializable_data)  # Update to return the user ID
-            messagebox.showinfo("Success", "Setup complete! Your preferences have been saved.")
-            
-            # Save the user_id locally
-            with open(LOCAL_STORAGE_FILE, "w") as f:
-                json.dump({"user_id": user_id}, f)
-            
-            self.destroy()
+        # try:
+        #     user_id = insert_user_data(
+        #         serializable_data
+        #     )  # Update to return the user ID
+        #     messagebox.showinfo(
+        #         "Success", "Setup complete! Your preferences have been saved."
+        #     )
 
-            # Call the callback function if provided
+        #     # Save the user_id locally
+        #     with open(LOCAL_STORAGE_FILE, "w") as f:
+        #         json.dump({"user_id": user_id}, f)
+
+        #     self.destroy()
+
+        #     # Call the callback function if provided
+        #     if self.on_registration_complete:
+        #         self.on_registration_complete()
+
+        # except Exception as e:
+        #     messagebox.showerror("Error", f"An error occurred while saving data: {e}")
+
+        try:
+            user_id = insert_user_data(serializable_data)
+            token = jwt.encode({"user_id": user_id}, self.jwt_secret, algorithm="HS256")
+
+            messagebox.showinfo(
+                "Success", "Setup complete! Your preferences have been saved."
+            )
+
+            # 7) Save the token, not the raw ID
+            with open(LOCAL_STORAGE_FILE, "w") as f:
+                json.dump({"token": token}, f)
+
+            self.destroy()
             if self.on_registration_complete:
                 self.on_registration_complete()
 
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred while saving data: {e}")
 
-
-
-    
-
-    def generate_tag(self,question, response):
+    def generate_tag(self, question, response):
         """Generate a tag for a given response using OpenAI."""
         prompt = f"""
         Given the question "{question}" and the response "{response}", categorize the response with a suitable tag such as 'Favorite Team', 'Preferred Cuisine', etc.
@@ -900,9 +1042,6 @@ class RegistrationWizard(ctk.CTk):
         except Exception as e:
             print(f"Error generating tag: {e}")
             return "Unknown"
-        
-    
-
 
 
 if __name__ == "__main__":

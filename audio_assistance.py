@@ -21,8 +21,13 @@ from Dictapp import (
     bring_to_front,
 )
 from dotenv import load_dotenv
+import jwt
 
 load_dotenv()
+
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise ValueError("JWT_SECRET not set in .env")
 
 
 class JarvisAssistant:
@@ -134,49 +139,32 @@ class JarvisAssistant:
                 self.chat_with_jarvis(query)
 
             elif "reminder" in query or "set reminder" in query:
+                import json
+
                 self.speak("Sure, please tell me your reminder details.")
                 from ReminderSystem import ReminderSystem
 
                 reminder_system = ReminderSystem()
-
-                def check_existing_user():
-                    import json
-
-                    """Check if a user is already registered on this machine."""
-                    LOCAL_STORAGE_FILE = "user_config.json"
-                    # print("Checking for existing user...")  # Debug statement
-
-                    if os.path.exists(LOCAL_STORAGE_FILE):
-                        print(
-                            f"Config file found: {LOCAL_STORAGE_FILE}"
-                        )  # Debug statement
-                        try:
-                            with open(LOCAL_STORAGE_FILE, "r") as f:
-                                data = json.load(f)
-                                # print(f"Config file content: {data}")  # Debug statement
-                                user_id = data.get("user_id")
-                                if user_id:  # Ensure the ID is not None or empty
-                                    # print(
-                                    #     f"Existing user detected: {user_id}"
-                                    # )  # Debug statement
-                                    return user_id
-                                else:
-                                    print(
-                                        "No user_id found in config file."
-                                    )  # Debug statement
-                        except json.JSONDecodeError as e:
-                            print(
-                                f"Error reading local storage file: {e}"
-                            )  # Debug statement
-                    else:
-                        print("No config file found.")  # Debug statement
-
-                    return None
-
-                reminder_system.create_reminder_from_voice(
-                    user_id=check_existing_user()
-                )
-                self.speak("Reminder Created Successfully")
+                # JWT‐based user_id lookup
+                user_id = None
+                cfg_file = "user_config.json"
+                if os.path.exists(cfg_file):
+                    try:
+                        with open(cfg_file, "r") as f:
+                            data = json.load(f)
+                        token = data.get("token")
+                        if token:
+                            payload = jwt.decode(
+                                token, JWT_SECRET, algorithms=["HS256"]
+                            )
+                            user_id = payload.get("user_id")
+                    except (json.JSONDecodeError, jwt.PyJWTError):
+                        user_id = None
+                if not user_id:
+                    self.speak("I couldn't find your user ID—please register again.")
+                    return
+                reminder_system.create_reminder_from_voice(user_id=user_id)
+                self.speak("Reminder created successfully.")
 
     def start_listening(self):
         """Start the assistant in a loop."""

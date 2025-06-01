@@ -217,8 +217,9 @@ class FileActionPopup(QWidget):
                     )
 
             else:
-                self.feedback_label.setText("❌ Unsupported action.")
-                self.feedback_label.setStyleSheet("color: #ff5252; font-size: 12px;")
+                # self.feedback_label.setText("❌ Unsupported action.")
+                # self.feedback_label.setStyleSheet("color: #ff5252; font-size: 12px;")
+                print("[JARVIS] ❌ Unsupported action.")
 
             self.feedback_label.setVisible(True)
 
