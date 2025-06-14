@@ -12,6 +12,7 @@ import pyperclip
 from urllib.parse import urlparse
 import pyautogui
 import time
+from UUtils import resource_path12,bundle_root12
 
 load_dotenv()
 
@@ -25,7 +26,7 @@ class FloatingInputBar(QWidget):
             | Qt.WindowType.Tool
         )
         self.agent = FormFillerAgent(
-            "forms_config.json", "user_config.json", headless=False
+             resource_path12("forms_config.json"), "user_config.json", headless=False
         )
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -85,7 +86,7 @@ class FloatingInputBar(QWidget):
         layout.addWidget(self.send_button)
 
         self.hide()
-        self.filler = SmartFormFiller("jarvis-ocr.json")
+        self.filler = SmartFormFiller(resource_path12("jarvis-ocr.json"))
         self.reminder_system = ReminderSystem()
         self.openai_key = os.getenv("OPENAI_API_KEY")
 

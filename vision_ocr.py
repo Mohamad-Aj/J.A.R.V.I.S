@@ -11,12 +11,13 @@ import openai
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from dateutil import parser as date_parser
-
+from UUtils import resource_path12, bundle_root12
 
 class SmartFormFiller:
     def __init__(self, credentials_path=None):
         if credentials_path:
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
+            credentials_path = resource_path12("jarvis-ocr.json")
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path)
         self.vision_client = vision.ImageAnnotatorClient()
 
     def get_user_id(self, config_path="user_config.json"):

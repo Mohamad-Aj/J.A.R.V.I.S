@@ -2,18 +2,23 @@ import json
 import psycopg2
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
-
+from UUtils import resource_path
+import os
 # your Supabase Postgres URL
 DATABASE_URL = "postgresql://postgres:Jarvisgroup15@db.nsgeslmkrejtlifazhnu.supabase.co:5432/postgres"
-DATABASE_URL = "postgresql://postgres.nsgeslmkrejtlifazhnu:Jarvisgroup15@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
+from dotenv import load_dotenv
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL missing in .env")
+
 
 
 class FormFillerAgent:
     def __init__(self, config_path: str, user_config_path: str, headless: bool = True):
         # 1) Load form-selectors/config
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(resource_path(config_path), "r", encoding="utf-8") as f:      # ← change
             self.forms_config = json.load(f)
-
         # 2) Load user_id from user_config.json
         # 2) Load & decode JWT from user_config.json
         import jwt, os
@@ -24,7 +29,7 @@ class FormFillerAgent:
         if not JWT_SECRET:
             raise ValueError("JWT_SECRET not set in .env")
 
-        with open(user_config_path, "r", encoding="utf-8") as f:
+        with open(resource_path(user_config_path), "r", encoding="utf-8") as f:  # ← change
             cfg = json.load(f)
         token = cfg.get("token")
         if not token:

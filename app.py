@@ -30,6 +30,11 @@ from vision_ocr import SmartFormFiller
 from dotenv import load_dotenv
 import subprocess, sys, os
 
+if getattr(sys, "frozen", False):
+    import multiprocessing
+    multiprocessing.freeze_support()
+
+
 load_dotenv()
 
 import jwt
@@ -437,7 +442,7 @@ def launch_main_window():
     monitor_process.start()
 
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     apply_stylesheet(app, theme="dark_teal.xml")
 
@@ -460,3 +465,7 @@ if __name__ == "__main__":
         wizard.mainloop()
 
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

@@ -59,3 +59,65 @@ def auto_build_mapping(self, page) -> Dict[str, str]:
         selector = el.eval("el => el.id ? `#${el.id}` : el.outerHTML")
         mapping[key] = selector
     return mapping
+
+
+# utils.py  (put it anywhere that is imported early – e.g. top of form_filler_agent.py)
+from pathlib import Path
+import sys, os
+import sys, shutil
+
+
+def resource_path(rel_path: str | os.PathLike) -> Path:
+    """
+    Return an absolute Path to *rel_path* whether we are running
+    from source or from a PyInstaller bundle.
+    """
+    base = getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)
+    return Path(base, rel_path)
+
+
+# utils.py  ─────────────────────────────────────────────────────────
+
+
+def bundle_root() -> Path:
+    """Folder that contains JARVIS.exe when frozen, or cwd when not."""
+    if getattr(sys, "frozen", False):          # running from PyInstaller bundle
+        return Path(sys.executable).parent     # …/dist/JARVIS
+    return Path(__file__).resolve().parent     # normal dev run
+
+def copy_to_internal(src: Path):
+    """Duplicate *src* into the _internal runtime folder."""
+    if getattr(sys, "frozen", False):
+        internal = Path(sys._MEIPASS) / src.name   # …/dist/JARVIS/_internal
+        try:
+            shutil.copy2(src, internal)
+        except Exception as exc:
+            # non-fatal – just print for diagnostics
+            print("⚠️  could not copy to _internal:", exc)
+
+
+# paths.py  ───────────────────────────────────────────────
+from pathlib import Path
+import sys
+
+def bundle_root12() -> Path:
+    """
+    Return the folder that contains the executable when frozen,
+    else the project root when running from source.
+    """
+    if getattr(sys, "frozen", False):               # PyInstaller sets this
+        return Path(sys.executable).parent          # …\dist\JARVIS
+    return Path(__file__).resolve().parent
+
+def resource_path12(name: str) -> Path:
+    """
+    Locate *read-only* files shipped with the app
+    (JSON, images, DLLs…)  no matter where PyInstaller put them.
+    """
+    root = bundle_root()
+    # first look right next to the EXE, then inside _internal
+    direct = root / name
+    internal = root / "_internal" / name
+    if direct.exists():
+        return direct
+    return internal        # PyInstaller keeps it here in “standard” mode

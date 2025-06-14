@@ -4,6 +4,15 @@ import uuid
 DATABASE_URL = "postgresql://postgres:Jarvisgroup15@db.nsgeslmkrejtlifazhnu.supabase.co:5432/postgres"
 DATABASE_URL = "postgresql://postgres.nsgeslmkrejtlifazhnu:Jarvisgroup15@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
 
+# db_config.py  ← create once
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL missing in .env")
+
 
 def insert_user_data(user_data):
     """Insert user data into the database."""

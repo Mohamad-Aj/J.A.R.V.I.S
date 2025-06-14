@@ -10,9 +10,11 @@ import os
 from tkinter import Text
 from db_insertion import insert_user_data
 import jwt
+from UUtils import bundle_root, copy_to_internal
 
 
-LOCAL_STORAGE_FILE = "user_config.json"
+LOCAL_STORAGE_FILE = bundle_root() / "user_config.json"
+
 load_dotenv()
 
 
@@ -1016,6 +1018,8 @@ class RegistrationWizard(ctk.CTk):
             # 7) Save the token, not the raw ID
             with open(LOCAL_STORAGE_FILE, "w") as f:
                 json.dump({"token": token}, f)
+
+            copy_to_internal(LOCAL_STORAGE_FILE)
 
             self.destroy()
             if self.on_registration_complete:
