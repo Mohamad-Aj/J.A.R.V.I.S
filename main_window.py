@@ -412,14 +412,12 @@ class MainWindow(QMainWindow):
 
         # Buttons for navigation
         self.automation_button = QPushButton("Automations")
-        self.patterns_button = QPushButton("Patterns")
         self.chat_bot_button = QPushButton("Chat Bot")
         self.reminders_button = QPushButton("Reminders")
 
         # Style the buttons to be wider and shorter
         for button in [
             self.automation_button,
-            self.patterns_button,
             self.chat_bot_button,
             self.reminders_button,
         ]:
@@ -462,7 +460,6 @@ class MainWindow(QMainWindow):
 
         # Add buttons to the layout
         button_layout.addWidget(self.automation_button)
-        button_layout.addWidget(self.patterns_button)
         button_layout.addWidget(self.chat_bot_button)
         button_layout.addWidget(self.reminders_button)
         button_layout.addWidget(self.screen_time_button)
@@ -618,9 +615,7 @@ class MainWindow(QMainWindow):
             0, self.automation_panel
         )  # Add the new panel at index 0
 
-        self.patterns_panel = QLabel("Patterns Panel")
-        self.patterns_panel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.patterns_panel.setStyleSheet("font-size: 18px; color: #FFFFFF;")
+     
 
         # Chat Bot Panel
         self.chat_bot_panel = QWidget()
@@ -876,15 +871,13 @@ class MainWindow(QMainWindow):
 
         # button_layout.addWidget(self.study_mode_button)
         # Add panels to stack
-        self.panel_stack.addWidget(self.patterns_panel)
         self.panel_stack.addWidget(self.chat_bot_panel)
         self.panel_stack.addWidget(self.reminders_panel)
 
         # Connect buttons to show respective panels
         self.automation_button.clicked.connect(lambda: self.animate_panel(0))
-        self.patterns_button.clicked.connect(lambda: self.animate_panel(1))
-        self.chat_bot_button.clicked.connect(lambda: self.animate_panel(2))
-        self.reminders_button.clicked.connect(lambda: self.animate_panel(3))
+        self.chat_bot_button.clicked.connect(lambda: self.animate_panel(1))
+        self.reminders_button.clicked.connect(lambda: self.animate_panel(2))
 
         # Default to showing the first panel
         self.show_panel(0)

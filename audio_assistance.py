@@ -150,7 +150,8 @@ class JarvisAssistant:
                 cfg_file = "user_config.json"
                 if os.path.exists(cfg_file):
                     try:
-                        with open(cfg_file, "r") as f:
+                        from UUtils import resource_path12
+                        with open(resource_path12(cfg_file), "r") as f:
                             data = json.load(f)
                         token = data.get("token")
                         if token:

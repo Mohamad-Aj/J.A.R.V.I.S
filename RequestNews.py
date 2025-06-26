@@ -4,10 +4,11 @@ import json
 from bs4 import BeautifulSoup
 import openai
 from dotenv import load_dotenv
+import os, json, jwt
 
 load_dotenv()
 
-
+JWT_SECRET = os.getenv("JWT_SECRET")
 class NewsFetcher:
     def __init__(self, db_url):
         self.db_url = db_url
@@ -135,12 +136,12 @@ class YnetScraper:
                 print(f"Validating description for: {article['title']}")
                 try:
                     prompt = (
-                        f"Check if the following description and title are related to these preferences: {preferences}\n\n"
+                        f"Check if the following description and title are related to these preferences or any of their sub perfrences like sports:basketball,football etc. the prefrences are: {preferences}\n\n"
                         f"Title:{article['title']} Description: {article['description']}\n\n"
                         f"Respond 'Yes' if related or 'No' if unrelated."
                     )
                     response = openai.chat.completions.create(
-                        model="gpt-3.5-turbo",
+                        model="4o",
                         messages=[{"role": "user", "content": prompt}],
                         max_tokens=5,
                         temperature=0.4,
@@ -162,19 +163,30 @@ class YnetScraper:
         return filtered_articles
 
 
-def get_user_id_from_config(file_path):
+def get_user_id_from_config(file_path: str) -> str | None:
     """
-    Read the user ID from the user_config.json file.
+    Return the user_id regardless of whether the config stores a raw ID
+    or a JWT token.
+
+    Works both in dev mode and in a PyInstaller-frozen EXE.
     """
-    print(f"Reading user_id from config file: {file_path}")
     try:
-        with open(file_path, "r") as file:
-            config = json.load(file)
-            user_id = config.get("user_id")
-            print(f"User ID found: {user_id}")
-            return user_id
+        # in a frozen app resolve the file inside …\\_internal
+        from UUtils import resource_path12          # safe even in dev mode
+        file_path = resource_path12(file_path)
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+
+        # new format ➜ JWT token
+        if "token" in cfg and JWT_SECRET:
+            payload = jwt.decode(cfg["token"], JWT_SECRET, algorithms=["HS256"])
+            return payload.get("user_id")
+
+        # old format ➜ raw id
+        return cfg.get("user_id")
     except Exception as e:
-        print(f"Error reading user config file: {e}")
+        print(f"[get_user_id_from_config] error: {e}")
         return None
 
 

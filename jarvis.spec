@@ -33,15 +33,22 @@ a = Analysis(
     pathex=[str(BASE)],
     #
     # ---- native libraries -----------------------------------------------------
-    binaries=[
-        # all Tesseract DLLs
-        ("Tesseract-OCR\\*.dll", "Tesseract-OCR"),
-        # Porcupine wake-word engine (64-bit Windows build)
-        (
-            str(PVP_PATH / "lib" / "windows" / "amd64" / "libpv_porcupine.dll"),
-            "pvporcupine/lib/windows/amd64",
-        ),
-    ],
+    binaries = [
+    # all Tesseract DLLs
+    ("Tesseract-OCR\\*.dll", "Tesseract-OCR"),
+
+    # Porcupine wake-word engine DLL
+    (
+        str(PVP_PATH / "lib" / "windows" / "amd64" / "libpv_porcupine.dll"),
+        "pvporcupine/lib/windows/amd64",
+    ),
+
+    # 🔽 NEW — Porcupine acoustic-model file
+    (
+        str(PVP_PATH / "lib" / "common" / "porcupine_params.pv"),
+        "pvporcupine/lib/common",
+    ),
+],
     #
     # ---- data files -----------------------------------------------------------
     datas=[
