@@ -40,10 +40,17 @@ import os
 import json
 from activity_GUI import DashboardPanel  # Assuming this is your DashboardPanel file
 from study_mode import StudyMode
+import jwt
+from pathlib import Path
+import asyncio
+from duplicate_detector import DuplicateDetector
+from screen_time_window import DashboardWindow
 
 
 load_dotenv()
-
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise ValueError("JWT_SECRET not set in .env")
 import mimetypes
 
 
@@ -109,6 +116,112 @@ class SummarizeFileWorker(QThread):
             self.finished.emit(summary)  # Emit the result
         except Exception as e:
             self.error.emit(str(e))  # Emit any error
+
+
+# ──────────────────────────────────────────────────────────────────
+#  DUPLICATE-FINDER WORKER  – emits two **lists**
+# ──────────────────────────────────────────────────────────────────
+class DupWorker(QThread):
+    """
+    Runs DuplicateDetector in a background thread.
+
+    finished(list exact_pairs, list similar_pairs)
+        exact_pairs   -> list[tuple[Path, Path]]
+        similar_pairs -> list[tuple[Path, Path]]
+    """
+
+    finished = pyqtSignal(list, list)  # ✅ lists, not dict + list
+    error = pyqtSignal(str)
+
+    def __init__(self, dir_path: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.dir_path = dir_path
+        self.detector = DuplicateDetector(openai.api_key)
+
+    # ------------------------------------------------------------------
+    def run(self) -> None:
+        """Execute duplicate scan and emit results."""
+        try:
+            exact_pairs, similar_pairs = asyncio.run(
+                self.detector.scan(Path(self.dir_path))
+            )
+            # DuplicateDetector now returns *lists* → emit them directly
+            self.finished.emit(exact_pairs, similar_pairs)
+        except Exception as exc:
+            # Bubble any error up to the GUI
+            self.error.emit(str(exc))
+
+
+# ───── Merge + Delete helpers  ─────────────────────────────────────────
+class MergeWorker(QThread):
+    """
+    Reads BOTH files completely, asks GPT to produce a single merged version,
+    then emits the merged text (str).  No token limits are applied.
+    """
+
+    finished = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, file_a: Path, file_b: Path, parent=None):
+        super().__init__(parent)
+        self.a, self.b = file_a, file_b
+        self.client = openai
+
+    def run(self) -> None:
+        try:
+
+            def read(p: Path) -> str:
+                ext = p.suffix.lower()
+                if ext == ".pdf":
+                    from PyPDF2 import PdfReader
+
+                    return "".join(
+                        pg.extract_text() or "" for pg in PdfReader(str(p)).pages
+                    )
+                if ext == ".docx":
+                    from docx import Document
+
+                    return " ".join(par.text for par in Document(str(p)).paragraphs)
+                # txt fallback
+                return p.read_text(encoding="utf-8", errors="ignore")
+
+            text_a, text_b = read(self.a), read(self.b)
+            prompt = (
+                "Merge the following two documents into ONE coherent file, "
+                "🚫  DO NOT use any markdown or special formatting symbols "
+                "(no # headings, no *, no lists, no bold, no italics). "
+                "Write plain sentences and paragraphs only.\n\n"
+                "removing duplicates but keeping ALL unique information.\n\n"
+                f"--- FILE A ({self.a.name}) ---\n{text_a}\n\n"
+                f"--- FILE B ({self.b.name}) ---\n{text_b}"
+            )
+
+            rsp = self.client.chat.completions.create(
+                model="gpt-4o-mini",  # change if you like
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,  # deterministic-ish
+            )
+            merged = rsp.choices[0].message.content
+            self.finished.emit(merged)
+
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class DeleteWorker(QThread):
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, victim: Path, parent=None):
+        super().__init__(parent)
+        self.victim = victim
+
+    def run(self):
+        try:
+            self.victim.unlink()  # move to trash if you prefer
+            self.finished.emit()
+        except Exception as e:
+            self.error.emit(str(e))
 
 
 class RenameFileWorker(QThread):
@@ -299,14 +412,12 @@ class MainWindow(QMainWindow):
 
         # Buttons for navigation
         self.automation_button = QPushButton("Automations")
-        self.patterns_button = QPushButton("Patterns")
         self.chat_bot_button = QPushButton("Chat Bot")
         self.reminders_button = QPushButton("Reminders")
 
         # Style the buttons to be wider and shorter
         for button in [
             self.automation_button,
-            self.patterns_button,
             self.chat_bot_button,
             self.reminders_button,
         ]:
@@ -349,7 +460,6 @@ class MainWindow(QMainWindow):
 
         # Add buttons to the layout
         button_layout.addWidget(self.automation_button)
-        button_layout.addWidget(self.patterns_button)
         button_layout.addWidget(self.chat_bot_button)
         button_layout.addWidget(self.reminders_button)
         button_layout.addWidget(self.screen_time_button)
@@ -484,14 +594,44 @@ class MainWindow(QMainWindow):
         apps_layout.addWidget(apps_info)
         automation_layout.addLayout(apps_layout)
 
+        # Detect Duplicates button
+        dup_button = QPushButton("Detect Duplicates")
+        dup_button.setStyleSheet(button_style)
+        dup_button.setFixedSize(160, 40)
+        dup_button.clicked.connect(self.detect_duplicates)
+
+        dup_info = HoverLabel(
+            "Detect Duplicates", "Find duplicate / highly-similar files in a folder."
+        )
+        dup_info.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+        dup_layout = QHBoxLayout()
+        dup_layout.addWidget(dup_button)
+        dup_layout.addWidget(dup_info)
+        automation_layout.addLayout(dup_layout)
+
+
+        news_button = QPushButton("News")
+        news_button.setStyleSheet(button_style)
+        news_button.setFixedSize(160, 40)
+        news_button.clicked.connect(self.launch_news_window)
+
+        news_info = HoverLabel(
+            "News",
+            "Show a personalised news feed based on your hobbies / interests."
+        )
+        news_info.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+        news_layout = QHBoxLayout()
+        news_layout.addWidget(news_button)
+        news_layout.addWidget(news_info)
+        automation_layout.addLayout(news_layout)
         # Replace the QLabel automation panel with the new QWidget
         self.panel_stack.insertWidget(
             0, self.automation_panel
         )  # Add the new panel at index 0
 
-        self.patterns_panel = QLabel("Patterns Panel")
-        self.patterns_panel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.patterns_panel.setStyleSheet("font-size: 18px; color: #FFFFFF;")
+     
 
         # Chat Bot Panel
         self.chat_bot_panel = QWidget()
@@ -747,15 +887,13 @@ class MainWindow(QMainWindow):
 
         # button_layout.addWidget(self.study_mode_button)
         # Add panels to stack
-        self.panel_stack.addWidget(self.patterns_panel)
         self.panel_stack.addWidget(self.chat_bot_panel)
         self.panel_stack.addWidget(self.reminders_panel)
 
         # Connect buttons to show respective panels
         self.automation_button.clicked.connect(lambda: self.animate_panel(0))
-        self.patterns_button.clicked.connect(lambda: self.animate_panel(1))
-        self.chat_bot_button.clicked.connect(lambda: self.animate_panel(2))
-        self.reminders_button.clicked.connect(lambda: self.animate_panel(3))
+        self.chat_bot_button.clicked.connect(lambda: self.animate_panel(1))
+        self.reminders_button.clicked.connect(lambda: self.animate_panel(2))
 
         # Default to showing the first panel
         self.show_panel(0)
@@ -972,6 +1110,13 @@ class MainWindow(QMainWindow):
 
     def handle_stream_update(self, chunk):
         self.streamed_reply += chunk  # Just accumulate here
+
+    def launch_news_window(self):
+        import multiprocessing
+        from news_launcher import main as news_main
+
+        p = multiprocessing.Process(target=news_main)
+        p.start()
 
     def handle_stream_finish(self):
         # self.typing_timer.stop()
@@ -1274,33 +1419,23 @@ class MainWindow(QMainWindow):
         self.add_chat_message(f"Error: {error}", sender="jarvis")
 
     def check_existing_user(self):
-        import json
-        import os
-
-        """Check if a user is already registered on this machine."""
-        LOCAL_STORAGE_FILE = "user_config.json"
-        # print("Checking for existing user...")  # Debug statement
-
-        if os.path.exists(LOCAL_STORAGE_FILE):
-            print(f"Config file found: {LOCAL_STORAGE_FILE}")  # Debug statement
-            try:
-                with open(LOCAL_STORAGE_FILE, "r") as f:
-                    data = json.load(f)
-                    # print(f"Config file content: {data}")  # Debug statement
-                    user_id = data.get("user_id")
-                    if user_id:  # Ensure the ID is not None or empty
-                        # print(
-                        #     f"Existing user detected: {user_id}"
-                        # )  # Debug statement
-                        return user_id
-                    else:
-                        print("No user_id found in config file.")  # Debug statement
-            except json.JSONDecodeError as e:
-                print(f"Error reading local storage file: {e}")  # Debug statement
-        else:
-            print("No config file found.")  # Debug statement
-
-        return None
+        """Check if a user is already registered by decoding the saved JWT."""
+        cfg_path = "user_config.json"
+        if not os.path.exists(cfg_path):
+            return None
+        try:
+            with open(cfg_path, "r") as f:
+                data = json.load(f)
+        except json.JSONDecodeError:
+            return None
+        token = data.get("token")
+        if not token:
+            return None
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        except jwt.PyJWTError:
+            return None
+        return payload.get("user_id")
 
     def summarize_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -1653,20 +1788,22 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", f"Failed to create reminder: {e}")
 
     def show_screen_time(self):
-        from global_tracker import tracker_instance  # ✅ your existing tracker
-        from screen_time_worker import ScreenTimeWorker  # ✅ the worker
+        from global_tracker import tracker_instance
+        from screen_time_window import DashboardWindow
 
-        # Show loading screen or message (optional)
-        loading_msg = QLabel("⏳ Collecting data...")
-        loading_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        loading_msg.setStyleSheet("color: white; font-size: 18px;")
-        self.panel_stack.addWidget(loading_msg)
-        self.panel_stack.setCurrentWidget(loading_msg)
+        # If an old window exists, close it
+        if hasattr(self, "dashboard_window"):
+            self.dashboard_window.close()
+            del self.dashboard_window
 
-        # Start background worker
-        self.worker = ScreenTimeWorker(tracker_instance)
-        self.worker.data_ready.connect(self.display_screen_time)
-        self.worker.start()
+        # Pull the latest activity data
+        activity_data = tracker_instance.get_activity_data()
+
+        # Build & show a brand-new window
+        self.dashboard_window = DashboardWindow(activity_data, tracker_instance)
+        self.dashboard_window.show()
+        self.dashboard_window.raise_()
+        self.dashboard_window.activateWindow()
 
     def display_screen_time(self, activity_data):
         from global_tracker import tracker_instance
@@ -1692,3 +1829,177 @@ class MainWindow(QMainWindow):
 
         self.panel_stack.addWidget(self.loading_widget)
         self.panel_stack.setCurrentWidget(self.loading_widget)
+
+    def detect_duplicates(self):
+        # Ask user which folder to scan (replace with your “current dir” if you have it)
+        dir_path = QFileDialog.getExistingDirectory(
+            self, "Select folder to scan", os.path.expanduser("~")
+        )
+        if not dir_path:
+            return
+
+        # Simple loading label
+        loading = QLabel("🔍 Scanning for duplicates…")
+        loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        loading.setStyleSheet("color:white; font-size:18px;")
+        self.panel_stack.addWidget(loading)
+        self.panel_stack.setCurrentWidget(loading)
+
+        self.dup_worker = DupWorker(dir_path)
+        self.dup_worker.finished.connect(self.show_duplicates_dialog)
+        self.dup_worker.error.connect(
+            lambda err: QMessageBox.critical(self, "Duplicate detector", err)
+        )
+        self.dup_worker.start()
+
+    def show_duplicates_dialog(self, exact_pairs: list, similar_pairs: list):
+        dlg = QDialog(None)  # no parent → top-level window
+        dlg.setWindowFlags(
+            Qt.WindowType.Tool  # small utility window
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.WindowCloseButtonHint
+        )
+        dlg.setModal(False)
+        dlg.setWindowTitle("Duplicate detector")
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        layout = QVBoxLayout(dlg)
+
+        info_lbl = QLabel("Select a pair → choose *Merge* or *Delete*")
+        info_lbl.setStyleSheet("color:white; font-weight:bold;")
+        layout.addWidget(info_lbl)
+
+        lst = QListWidget()
+        pair_map = {}  # row-index → (Path, Path, verdict)
+        row = 0
+
+        for a, b in exact_pairs:
+            lst.addItem(f"EXACT   –  {a.name}  ⟷  {b.name}")
+            pair_map[row] = (a, b, "EXACT")
+            row += 1
+
+        for a, b in similar_pairs:
+            lst.addItem(f"SIMILAR –  {a.name}  ⟷  {b.name}")
+            pair_map[row] = (a, b, "SIMILAR")
+            row += 1
+
+        layout.addWidget(lst)
+
+        # action buttons
+        btn_box = QHBoxLayout()
+        merge_btn = QPushButton("🔀  Merge")
+        del_btn = QPushButton("🗑️  Delete second")
+
+        merge_btn.setEnabled(False)
+        del_btn.setEnabled(False)
+
+        btn_box.addWidget(merge_btn)
+        btn_box.addWidget(del_btn)
+        layout.addLayout(btn_box)
+
+        # ── enable buttons once a row is selected ─────────────────────────
+        def on_select():
+            merge_btn.setEnabled(True)
+            del_btn.setEnabled(True)
+
+        lst.currentRowChanged.connect(on_select)
+
+        # ── MERGE handler ─────────────────────────────────────────────────
+        # ── MERGE handler ─────────────────────────────────────────────────
+        def do_merge():
+            row = lst.currentRow()
+            a, b, verdict = pair_map[row]
+
+            if verdict != "SIMILAR":
+                QMessageBox.information(
+                    dlg,
+                    "Only for SIMILAR pairs",
+                    "Merge is offered only for SIMILAR pairs.",
+                )
+                return
+
+            # non-blocking progress indicator
+            prog = QMessageBox(
+                QMessageBox.Icon.Information,
+                "Merging…",
+                "Asking GPT to merge the documents.\nPlease wait…",
+                parent=dlg,
+            )
+            prog.setStandardButtons(QMessageBox.StandardButton.Cancel)
+            prog.show()
+
+            # keep reference on self  ✅
+            self.merge_worker = MergeWorker(a, b, self)
+
+            def finished(merged_text: str):
+                prog.done(0)  # close progress box
+                path = a.with_stem(a.stem + "_merged").with_suffix(".txt")
+                Path(path).write_text(merged_text, encoding="utf-8")
+                QMessageBox.information(dlg, "Done", f"Merged file saved to\n{path}")
+
+                if path:
+                    Path(path).write_text(merged_text, encoding="utf-8")
+                    QMessageBox.information(
+                        dlg, "Done", f"Merged file saved to\n{path}"
+                    )
+
+            def failed(err: str):
+                prog.done(0)
+                QMessageBox.critical(dlg, "Merge failed", err)
+
+            self.merge_worker.finished.connect(finished)
+            self.merge_worker.error.connect(failed)
+
+            # Allow the user to cancel ⤵︎
+            def cancel():
+                if hasattr(self, "merge_worker"):
+                    self.merge_worker.terminate()
+                    self.merge_worker.wait()
+                prog.done(0)
+
+            prog.button(QMessageBox.StandardButton.Cancel).clicked.connect(cancel)
+
+            self.merge_worker.start()
+
+        merge_btn.clicked.connect(do_merge)
+
+        # ── DELETE handler ───────────────────────────────────────────────
+        def do_delete():
+            row = lst.currentRow()
+            a, b, verdict = pair_map[row]
+
+            if verdict != "EXACT":
+                QMessageBox.information(
+                    dlg,
+                    "Only for EXACT pairs",
+                    "Deletion shortcut offered only for EXACT duplicates.",
+                )
+                return
+
+            if (
+                QMessageBox.question(
+                    dlg, "Confirm delete", f"Delete duplicate file:\n{b}?"
+                )
+                != QMessageBox.StandardButton.Yes
+            ):
+                return
+
+            worker = DeleteWorker(b, self)
+            worker.error.connect(
+                lambda err: QMessageBox.critical(dlg, "Delete error", err)
+            )
+            worker.finished.connect(
+                lambda: (
+                    lst.takeItem(row),  # remove row
+                    QMessageBox.information(dlg, "Deleted", f"{b.name} removed"),
+                )
+            )
+            worker.start()
+
+        del_btn.clicked.connect(do_delete)
+
+        dlg.resize(600, 400)
+        self._dup_dialog = dlg  # keep reference so GC doesn’t close it
+        dlg.show()
+
+        # Return to Automation panel afterwards
+        self.panel_stack.setCurrentWidget(self.automation_panel)

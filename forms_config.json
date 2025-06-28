@@ -1,0 +1,55 @@
+{
+    "amazon": {
+        "url": "https://www.amazon.com/ap/register",
+        "fields": {
+            "name": "#ap_customer_name",
+            "email": "#ap_email",
+            "password": "#ap_password",
+            "password_check": "#ap_password_check"
+        },
+        "submit_button": "#continue",
+        "captcha_selector": "#auth-captcha-image",
+        "captcha_input": "input[name='captcha']",
+        "post_submit": []
+    },
+    "instagram": {
+        "url": "https://www.instagram.com/accounts/emailsignup/",
+        "fields": {
+            "emailOrPhone": "input[name='emailOrPhone']",
+            "fullName": "input[name='fullName']",
+            "username": "input[name='username']",
+            "password": "input[name='password']"
+        },
+        "submit_button": "button[type='submit']"
+    },
+    "linkedin": {
+        "url": "https://www.linkedin.com/signup",
+        "fields": {
+            "email-address": "input#email-address",
+            "password": "input#password",
+            "first-name": "input#first-name",
+            "last-name": "input#last-name"
+        },
+        "submit_button": "button#join-form-submit"
+    },
+    "github": {
+        "url": "https://github.com/join",
+        "fields": {
+            "email": "input[placeholder*='Email']",
+            "password": "input[placeholder*='Password']",
+            "username": "input[placeholder*='Username']"
+        },
+        "submit_button": "button[type='submit']"
+    },
+    "x": {
+        "url": "https://x.com/i/flow/signup",
+        "pre_click": "button:has-text(\"Create account\")",
+        "fields": {
+            "name": "input[name='name']",
+            "emailOrPhone": "input[name='email']"
+        },
+        "submit_button": "role=button[name='Next']",
+        "captcha_selector": null,
+        "post_submit": []
+    }
+}

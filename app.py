@@ -28,8 +28,21 @@ from audio_assistance import JarvisAssistant
 from floating_input import FloatingInputBar
 from vision_ocr import SmartFormFiller
 from dotenv import load_dotenv
+import subprocess, sys, os
+
+if getattr(sys, "frozen", False):
+    import multiprocessing
+    multiprocessing.freeze_support()
+
 
 load_dotenv()
+
+import jwt
+from dotenv import load_dotenv
+
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise ValueError("JWT_SECRET not set in .env")
 
 
 class FloatingCircle(QWidget):
@@ -369,28 +382,27 @@ class FloatingCircle(QWidget):
 
 
 def check_existing_user():
-    """Check if a user is already registered on this machine."""
     LOCAL_STORAGE_FILE = "user_config.json"
-    print("Checking for existing user...")  # Debug statement
+    if not os.path.exists(LOCAL_STORAGE_FILE):
+        return None
 
-    if os.path.exists(LOCAL_STORAGE_FILE):
-        print(f"Config file found: {LOCAL_STORAGE_FILE}")  # Debug statement
+    try:
+        with open(LOCAL_STORAGE_FILE, "r") as f:
+            data = json.load(f)
+    except json.JSONDecodeError:
+        return None
+
+    # 1) If you find a token, decode it
+    token = data.get("token")
+    if token:
         try:
-            with open(LOCAL_STORAGE_FILE, "r") as f:
-                data = json.load(f)
-                print(f"Config file content: {data}")  # Debug statement
-                user_id = data.get("user_id")
-                if user_id:  # Ensure the ID is not None or empty
-                    print(f"Existing user detected: {user_id}")  # Debug statement
-                    return user_id
-                else:
-                    print("No user_id found in config file.")  # Debug statement
-        except json.JSONDecodeError as e:
-            print(f"Error reading local storage file: {e}")  # Debug statement
-    else:
-        print("No config file found.")  # Debug statement
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            return payload.get("user_id")
+        except jwt.PyJWTError:
+            return None
 
-    return None
+    # 2) (Optional) backward-compat: if there's a raw user_id, use it too
+    return data.get("user_id")
 
 
 def launch_main_window():
@@ -430,7 +442,7 @@ def launch_main_window():
     monitor_process.start()
 
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     apply_stylesheet(app, theme="dark_teal.xml")
 
@@ -453,3 +465,7 @@ if __name__ == "__main__":
         wizard.mainloop()
 
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

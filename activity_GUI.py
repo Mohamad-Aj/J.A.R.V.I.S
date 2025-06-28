@@ -103,7 +103,9 @@ class DashboardPanel(QWidget):
         fig = go.Figure(
             data=[
                 go.Bar(
-                    x=list(range(24)), y=hourly_usage, marker_color="rgb(90, 200, 250)"
+                    x=list(range(24)),
+                    y=[round(s / 60, 1) for s in hourly_usage],
+                    marker_color="rgb(90, 200, 250)",
                 )
             ]
         )
@@ -115,6 +117,7 @@ class DashboardPanel(QWidget):
             paper_bgcolor="#222",
             font=dict(color="white"),
         )
+        fig.update_yaxes(rangemode="tozero")
 
         html = plot(fig, output_type="div", include_plotlyjs="cdn")
         view = QWebEngineView()

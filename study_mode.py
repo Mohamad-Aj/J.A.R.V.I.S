@@ -24,8 +24,8 @@ class StudyMode(QObject):
         self.reminder_system = reminder_system
         self.user_id = user_id
         self.is_active = False
-        self.break_interval = 1 * 60  # can be set back to 45 * 60
-        self.summary_interval = 60 * 60  # can be set back to 30 * 60
+        self.break_interval = 40 * 60  # can be set back to 45 * 60
+        self.summary_interval = 40 * 60  # can be set back to 30 * 60
         self._thread = None
         self.parent = parent
         self.break_message_pool = BREAK_MESSAGES.copy()

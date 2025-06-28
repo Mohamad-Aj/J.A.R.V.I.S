@@ -7,6 +7,12 @@ from ReminderSystem import ReminderSystem
 import os
 import threading
 from dotenv import load_dotenv
+from form_filler_agent import FormFillerAgent
+import pyperclip
+from urllib.parse import urlparse
+import pyautogui
+import time
+from UUtils import resource_path12,bundle_root12
 
 load_dotenv()
 
@@ -19,6 +25,10 @@ class FloatingInputBar(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool
         )
+        self.agent = FormFillerAgent(
+             resource_path12("forms_config.json"), "user_config.json", headless=False
+        )
+
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(260, 42)
 
@@ -76,7 +86,7 @@ class FloatingInputBar(QWidget):
         layout.addWidget(self.send_button)
 
         self.hide()
-        self.filler = SmartFormFiller("jarvis-ocr.json")
+        self.filler = SmartFormFiller(resource_path12("jarvis-ocr.json"))
         self.reminder_system = ReminderSystem()
         self.openai_key = os.getenv("OPENAI_API_KEY")
 
@@ -110,7 +120,10 @@ class FloatingInputBar(QWidget):
         return super().eventFilter(source, event)
 
     def handle_send_input(self):
-        text = self.input_field.text().strip().lower()
+
+        text = self.input_field.text().strip()
+        parts = text.split(maxsplit=1)
+        cmd = parts[0].lower()
         if text == "create reminder":
             print("🧠 Triggering reminder from screen...")
             # filler = SmartFormFiller("jarvis-ocr.json")
@@ -123,6 +136,71 @@ class FloatingInputBar(QWidget):
             ).start()
             self.input_field.clear()
             self.hide()
+        elif cmd == "register":
+            # 1) extract password if given
+            if len(parts) == 2:
+                pwd = parts[1]
+            else:
+                print("❗ Usage: register <password>")
+                return
+
+            # 2) grab URL from active browser:
+            #    - focus address bar
+            import pygetwindow as gw
+
+            browser_win = None
+            for name in ("Chrome", "Edge", "Firefox"):
+                wins = gw.getWindowsWithTitle(name)
+                if wins:
+                    browser_win = wins[0]
+                    break
+
+            if not browser_win:
+                print("❌ Couldn't find a browser window.")
+                return
+
+            browser_win.activate()  # bring to front
+            time.sleep(0.3)  # let the OS switch focus
+            pyautogui.hotkey("ctrl", "l")
+            time.sleep(0.1)
+            pyautogui.hotkey("ctrl", "c")
+            time.sleep(0.1)
+            start_url = pyperclip.paste().strip()
+
+            if not start_url or not start_url.startswith("http"):
+                print("❌ Could not read URL from browser.")
+                return
+
+            # 3) figure out site_key
+            domain = urlparse(start_url).netloc.lower().lstrip("www.")
+            site_key = None
+            for key, cfg in self.agent.forms_config.items():
+                cfg_dom = urlparse(cfg["url"]).netloc.lower().lstrip("www.")
+                if domain.endswith(cfg_dom):
+                    site_key = key
+                    break
+
+            if not site_key:
+                print(f"❌ No form config for {domain}")
+                site_key = f"auto_{domain}"
+                print(f"ℹ️  No curated config for {domain}; will attempt auto-mapping.")
+                # return
+
+            # 4) inject password into agent.user_data
+            self.agent.user_data["password"] = pwd
+            self.agent.user_data["password_check"] = pwd
+
+            # 5) launch form fill
+            print(f"🧠 Filling form on {site_key}…")
+            threading.Thread(
+                target=self.agent.fill_form,
+                args=(site_key, print, start_url),
+                daemon=True,
+            ).start()
+
+            self.input_field.clear()
+            self.hide()
+            return
         elif text:
             print(f"📤 Input sent: {text}")
             self.input_field.clear()

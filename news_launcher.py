@@ -7,6 +7,8 @@ from RequestNews import NewsWindow, NewsFetcher, get_user_id_from_config
 
 def main():
     DATABASE_URL = "postgresql://postgres:Jarvisgroup15@db.nsgeslmkrejtlifazhnu.supabase.co:5432/postgres?sslmode=require"
+    DATABASE_URL = "postgresql://postgres.nsgeslmkrejtlifazhnu:Jarvisgroup15@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
+
     CONFIG_FILE_PATH = "user_config.json"
 
     user_id = get_user_id_from_config(CONFIG_FILE_PATH)
