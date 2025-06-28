@@ -610,6 +610,22 @@ class MainWindow(QMainWindow):
         dup_layout.addWidget(dup_info)
         automation_layout.addLayout(dup_layout)
 
+
+        news_button = QPushButton("News")
+        news_button.setStyleSheet(button_style)
+        news_button.setFixedSize(160, 40)
+        news_button.clicked.connect(self.launch_news_window)
+
+        news_info = HoverLabel(
+            "News",
+            "Show a personalised news feed based on your hobbies / interests."
+        )
+        news_info.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+        news_layout = QHBoxLayout()
+        news_layout.addWidget(news_button)
+        news_layout.addWidget(news_info)
+        automation_layout.addLayout(news_layout)
         # Replace the QLabel automation panel with the new QWidget
         self.panel_stack.insertWidget(
             0, self.automation_panel
@@ -1094,6 +1110,13 @@ class MainWindow(QMainWindow):
 
     def handle_stream_update(self, chunk):
         self.streamed_reply += chunk  # Just accumulate here
+
+    def launch_news_window(self):
+        import multiprocessing
+        from news_launcher import main as news_main
+
+        p = multiprocessing.Process(target=news_main)
+        p.start()
 
     def handle_stream_finish(self):
         # self.typing_timer.stop()
