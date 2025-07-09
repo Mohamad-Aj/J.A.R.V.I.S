@@ -94,7 +94,8 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,     # True => console window; False => pure GUI
+    console=False, 
+    icon = "icon.ico"    # True => console window; False => pure GUI
 )
 
 coll = COLLECT(
