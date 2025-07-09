@@ -610,15 +610,13 @@ class MainWindow(QMainWindow):
         dup_layout.addWidget(dup_info)
         automation_layout.addLayout(dup_layout)
 
-
         news_button = QPushButton("News")
         news_button.setStyleSheet(button_style)
         news_button.setFixedSize(160, 40)
         news_button.clicked.connect(self.launch_news_window)
 
         news_info = HoverLabel(
-            "News",
-            "Show a personalised news feed based on your hobbies / interests."
+            "News", "Show a personalised news feed based on your hobbies / interests."
         )
         news_info.setCursor(Qt.CursorShape.WhatsThisCursor)
 
@@ -630,8 +628,6 @@ class MainWindow(QMainWindow):
         self.panel_stack.insertWidget(
             0, self.automation_panel
         )  # Add the new panel at index 0
-
-     
 
         # Chat Bot Panel
         self.chat_bot_panel = QWidget()
@@ -1248,7 +1244,7 @@ class MainWindow(QMainWindow):
 
     def animate_panel(self, index):
         """Animate the transition to a new panel."""
-        if index == 3:
+        if index == 2:
             self.load_reminders()
         current_geometry = self.panel_stack.geometry()
         target_geometry = QRect(
@@ -1266,7 +1262,7 @@ class MainWindow(QMainWindow):
         self.show_panel(index)
 
     def show_panel(self, index):
-        if index == 3:  # Reminders Panel
+        if index == 2:  # Reminders Panel
             self.show_loading_screen("🔄 Loading Reminders...")
 
             self.reminder_loader_thread = ReminderLoaderWorker(
@@ -1777,10 +1773,10 @@ class MainWindow(QMainWindow):
             # ✅ Add to Google Calendar for current user
             user_data = self.get_user_data(self.user_id)
             email = user_data.get("email")
-            add_event_to_calendar(email, title, f"Priority: {priority}", dt)
+            event_id = add_event_to_calendar(email, title, f"Priority: {priority}", dt)
 
             self.reminder_system.create_reminder(
-                self.user_id, title, priority, dt.isoformat()
+                self.user_id, title, priority, dt.isoformat(), event_id
             )
             self.reminder_input.clear()
             self.load_reminders()

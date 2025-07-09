@@ -23,6 +23,10 @@ def insert_user_data(user_data):
 
         # Insert into users table
         user_id = str(uuid.uuid4())  # Generate a unique user ID
+
+        cursor.execute("SELECT 1 FROM users WHERE email = %s", (user_data["Email"],))
+        if cursor.fetchone():
+            raise ValueError("A user with this e-mail already exists.")
         cursor.execute(
             """
             INSERT INTO users (
@@ -94,6 +98,9 @@ def insert_user_data(user_data):
         conn.commit()
         print("Data inserted successfully!")
         return user_id
+    except Exception as e:
+        print(f"DB error: {e}")
+        raise  # ← add this
 
     except Exception as e:
         print(f"An error occurred: {e}")

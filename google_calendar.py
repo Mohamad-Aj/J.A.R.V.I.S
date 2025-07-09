@@ -21,7 +21,9 @@ def authenticate_google(user_email: str):
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(resource_path12("credentials.json"), SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(
+                resource_path12("credentials.json"), SCOPES
+            )
             creds = flow.run_local_server(port=0)
 
         with open(token_file, "wb") as token:
@@ -46,4 +48,35 @@ def add_event_to_calendar(
             "timeZone": "Asia/Jerusalem",
         },
     }
-    service.events().insert(calendarId="primary", body=event).execute()
+    event = service.events().insert(calendarId="primary", body=event).execute()
+    return event["id"]
+
+
+def patch_event(
+    user_email: str,
+    event_id: str,
+    title: str,
+    description: str,
+    start_dt: datetime.datetime,
+):
+    service = authenticate_google(user_email)
+    event = service.events().get(calendarId="primary", eventId=event_id).execute()
+    event.update(
+        {
+            "summary": title,
+            "description": description,
+            "start": {"dateTime": start_dt.isoformat(), "timeZone": "Asia/Jerusalem"},
+            "end": {
+                "dateTime": (start_dt + datetime.timedelta(hours=1)).isoformat(),
+                "timeZone": "Asia/Jerusalem",
+            },
+        }
+    )
+    service.events().update(
+        calendarId="primary", eventId=event_id, body=event
+    ).execute()
+
+
+def delete_event(user_email: str, event_id: str):
+    service = authenticate_google(user_email)
+    service.events().delete(calendarId="primary", eventId=event_id).execute()

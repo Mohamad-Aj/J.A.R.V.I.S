@@ -23,7 +23,7 @@ class ReminderSystem:
     def __init__(self, db_url=DATABASE_URL):
         self.db_url = db_url
 
-    def create_reminder(self, user_id, title, priority, datetime_str):
+    def create_reminder(self, user_id, title, priority, datetime_str, google_event_id):
         try:
             conn = psycopg2.connect(self.db_url)
             cursor = conn.cursor()
@@ -33,10 +33,10 @@ class ReminderSystem:
 
             cursor.execute(
                 """
-                INSERT INTO reminders (id, user_id, title, priority, datetime)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO reminders (id, user_id, title, priority, datetime, google_event_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """,
-                (reminder_id, user_id, title, priority, reminder_time),
+                (reminder_id, user_id, title, priority, reminder_time, google_event_id),
             )
 
             conn.commit()
@@ -52,11 +52,22 @@ class ReminderSystem:
         try:
             conn = psycopg2.connect(self.db_url)
             cursor = conn.cursor()
+            cursor.execute(
+                "SELECT google_event_id, user_id FROM reminders WHERE id=%s",
+                (reminder_id,),
+            )
+            event_id, user_id = cursor.fetchone()
             cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
             conn.commit()
             print("Reminder deleted.")
+            if event_id:
+                user_mail = self.get_user_data(user_id)["email"]
+                from google_calendar import delete_event
+
+                delete_event(user_mail, event_id)
         except Exception as e:
             print(f"Error deleting reminder: {e}")
+
         finally:
             if conn:
                 cursor.close()
@@ -273,6 +284,13 @@ class ReminderSystem:
         try:
             conn = psycopg2.connect(self.db_url)
             cursor = conn.cursor()
+
+            cursor.execute(
+                "SELECT google_event_id, user_id FROM reminders WHERE id=%s",
+                (reminder_id,),
+            )
+            event_id, user_id = cursor.fetchone()
+
             cursor.execute(
                 """
                 UPDATE reminders
@@ -283,6 +301,17 @@ class ReminderSystem:
             )
             conn.commit()
             print(f"Reminder {reminder_id} updated.")
+            if event_id:  # silent no-op for old rows
+                user_mail = self.get_user_data(user_id)["email"]
+                from google_calendar import patch_event
+
+                patch_event(
+                    user_mail,
+                    event_id,
+                    new_title,
+                    f"Priority: {new_priority}",
+                    new_datetime,
+                )
         finally:
             if conn:
                 cursor.close()
